@@ -1,0 +1,6 @@
+@OneAccess.API_HostAddress = http://localhost:5010
+
+GET {{OneAccess.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

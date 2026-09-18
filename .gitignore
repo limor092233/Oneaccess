@@ -1,0 +1,32 @@
+# Build results
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+# Visual Studio / VS Code / Rider
+.vs/
+.vscode/
+.idea/
+*.user
+*.userosscache
+*.sln.docstates
+*.suo
+
+# Test results & coverage
+TestResults/
+[Tt]est[Rr]esults/
+*.trx
+coverage*.json
+coverage*.xml
+coverage*.info
+
+# Configuration & secrets (agent.md Section 2, Rule 6)
+appsettings.Development.json
+appsettings.*.local.json
+**/secrets.json
+secrets.json
+
+# OS files
+.DS_Store
+Thumbs.db
