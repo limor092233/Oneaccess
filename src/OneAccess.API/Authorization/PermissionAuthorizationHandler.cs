@@ -26,8 +26,8 @@ public class PermissionAuthorizationHandler : AuthorizationHandler<PermissionReq
             return;
         }
 
-        // System Administrator unconditionally holds all permissions
-        if (_currentUserService.IsSystemAdministrator)
+        // System Administrator unconditionally holds all permissions (evaluated live per-request)
+        if (await _currentUserService.IsSystemAdministratorAsync())
         {
             context.Succeed(requirement);
             return;

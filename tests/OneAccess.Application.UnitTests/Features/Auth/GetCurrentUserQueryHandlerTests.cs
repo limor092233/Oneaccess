@@ -56,6 +56,8 @@ public class GetCurrentUserQueryHandlerTests
         _currentUserService.IsAuthenticated.Returns(true);
         _currentUserService.UserId.Returns(userId);
         _currentUserService.Roles.Returns(new List<string> { "System Administrator" });
+        _currentUserService.GetRolesAsync(Arg.Any<CancellationToken>()).Returns(new List<string> { "System Administrator" });
+        _currentUserService.IsSystemAdministratorAsync(Arg.Any<CancellationToken>()).Returns(true);
         _currentUserService.GetPermissionsAsync(Arg.Any<CancellationToken>()).Returns(new List<string> { "user.create", "user.view" });
         _subSystemAccessService.GetAccessibleSubSystemsAsync(userId, Arg.Any<CancellationToken>()).Returns(new List<SubSystem>());
         _readDbContext.Users.Returns(new List<User> { user }.AsQueryable());

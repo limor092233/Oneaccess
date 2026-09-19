@@ -10,6 +10,8 @@ public interface ICurrentUserService
     bool IsAuthenticated { get; }
     bool IsSystemAdministrator { get; }
     IReadOnlyList<string> Roles { get; }
+    Task<bool> IsSystemAdministratorAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<string>> GetRolesAsync(CancellationToken ct = default);
     Task<IReadOnlyList<string>> GetPermissionsAsync(CancellationToken ct = default);
     Task<IReadOnlyList<Guid>> GetAssignedDivisionIdsAsync(CancellationToken ct = default);
 }

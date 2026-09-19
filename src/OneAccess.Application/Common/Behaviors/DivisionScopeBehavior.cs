@@ -33,7 +33,7 @@ public class DivisionScopeBehavior<TRequest, TResponse> : IPipelineBehavior<TReq
             return await next();
         }
 
-        if (_currentUserService.IsSystemAdministrator)
+        if (await _currentUserService.IsSystemAdministratorAsync(cancellationToken))
         {
             return await next();
         }

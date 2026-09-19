@@ -57,6 +57,41 @@ public class CurrentUserService : ICurrentUserService
 
     public bool IsSystemAdministrator => Roles.Contains(SystemRoles.SystemAdministrator);
 
+    public async Task<bool> IsSystemAdministratorAsync(CancellationToken ct = default)
+    {
+        if (!UserId.HasValue) return false;
+
+        var cacheKey = $"is_sysadmin:{UserId.Value}";
+        var cached = await _cacheService.GetAsync<bool?>(cacheKey, ct);
+        if (cached.HasValue) return cached.Value;
+
+        var isSysAdmin = await _readDbContext.Users
+            .Where(u => u.Id == UserId.Value && u.Status == UserStatus.Active)
+            .Select(u => u.IsSystemAdministrator)
+            .FirstOrDefaultAsync(ct);
+
+        await _cacheService.SetAsync(cacheKey, isSysAdmin, TimeSpan.FromMinutes(5), ct);
+        return isSysAdmin;
+    }
+
+    public async Task<IReadOnlyList<string>> GetRolesAsync(CancellationToken ct = default)
+    {
+        if (!UserId.HasValue) return Array.Empty<string>();
+
+        var cacheKey = $"roles:{UserId.Value}";
+        var cached = await _cacheService.GetAsync<List<string>>(cacheKey, ct);
+        if (cached != null) return cached;
+
+        var roles = await (from ur in _readDbContext.UserRoles
+                           join r in _readDbContext.Roles on ur.RoleId equals r.Id
+                           where ur.UserId == UserId.Value
+                           select r.Name)
+                           .ToListAsync(ct);
+
+        await _cacheService.SetAsync(cacheKey, roles, TimeSpan.FromMinutes(5), ct);
+        return roles;
+    }
+
     public async Task<IReadOnlyList<string>> GetPermissionsAsync(CancellationToken ct = default)
     {
         if (!UserId.HasValue) return Array.Empty<string>();
@@ -65,8 +100,9 @@ public class CurrentUserService : ICurrentUserService
         var cached = await _cacheService.GetAsync<List<string>>(cacheKey, ct);
         if (cached != null) return cached;
 
-        // If System Administrator, return all permissions
-        if (IsSystemAdministrator)
+        // If System Administrator (evaluated live from cache/DB), return all permissions
+        var isSysAdmin = await IsSystemAdministratorAsync(ct);
+        if (isSysAdmin)
         {
             var allPerms = await _readDbContext.Permissions
                 .Select(p => p.Code)

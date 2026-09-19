@@ -41,13 +41,16 @@ public class GetCurrentUserQueryHandler : IRequestHandler<GetCurrentUserQuery, R
             .Select(s => new CurrentSubsystemInfo(s.Id, s.Code, s.Name, s.BaseUrl))
             .ToList();
 
+        var roles = await _currentUserService.GetRolesAsync(cancellationToken);
+        var isSysAdmin = await _currentUserService.IsSystemAdministratorAsync(cancellationToken);
+
         var response = new CurrentUserResponse(
             user.Id,
             user.Username,
             user.Email,
             user.FullName,
-            user.IsSystemAdministrator,
-            _currentUserService.Roles,
+            isSysAdmin,
+            roles,
             permissions,
             subSystemInfos);
 
