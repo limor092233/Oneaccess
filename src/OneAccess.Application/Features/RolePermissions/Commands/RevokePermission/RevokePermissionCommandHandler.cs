@@ -12,7 +12,6 @@ public class RevokePermissionCommandHandler : IRequestHandler<RevokePermissionCo
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUserService;
     private readonly ICacheService _cacheService;
-    private readonly ITokenRevocationService _tokenRevocationService;
     private readonly IDateTimeProvider _dateTimeProvider;
 
     public RevokePermissionCommandHandler(
@@ -20,14 +19,12 @@ public class RevokePermissionCommandHandler : IRequestHandler<RevokePermissionCo
         IUnitOfWork unitOfWork,
         ICurrentUserService currentUserService,
         ICacheService cacheService,
-        ITokenRevocationService tokenRevocationService,
         IDateTimeProvider dateTimeProvider)
     {
         _readDbContext = readDbContext;
         _unitOfWork = unitOfWork;
         _currentUserService = currentUserService;
         _cacheService = cacheService;
-        _tokenRevocationService = tokenRevocationService;
         _dateTimeProvider = dateTimeProvider;
     }
 
@@ -65,6 +62,7 @@ public class RevokePermissionCommandHandler : IRequestHandler<RevokePermissionCo
         var now = _dateTimeProvider.UtcNow;
 
         // Guard 7: Invalidate cached permissions for all users currently assigned to this role
+        // (Permissions are evaluated live on next request via ICurrentUserService.GetPermissionsAsync)
         var affectedUserIds = _readDbContext.UserRoles
             .Where(ur => ur.RoleId == role.Id)
             .Select(ur => ur.UserId)
@@ -73,7 +71,6 @@ public class RevokePermissionCommandHandler : IRequestHandler<RevokePermissionCo
         foreach (var userId in affectedUserIds)
         {
             await _cacheService.RemoveAsync($"permissions:{userId}", cancellationToken);
-            await _tokenRevocationService.RevokeAsync(userId, now, cancellationToken);
         }
 
         var auditRepo = _unitOfWork.Repository<AuditLog>();

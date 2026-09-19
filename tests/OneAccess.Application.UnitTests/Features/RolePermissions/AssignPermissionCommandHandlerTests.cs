@@ -14,7 +14,6 @@ public class AssignPermissionCommandHandlerTests
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUserService;
     private readonly ICacheService _cacheService;
-    private readonly ITokenRevocationService _tokenRevocationService;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IRepository<Role> _roleRepo;
     private readonly IRepository<Permission> _permRepo;
@@ -28,7 +27,6 @@ public class AssignPermissionCommandHandlerTests
         _unitOfWork = Substitute.For<IUnitOfWork>();
         _currentUserService = Substitute.For<ICurrentUserService>();
         _cacheService = Substitute.For<ICacheService>();
-        _tokenRevocationService = Substitute.For<ITokenRevocationService>();
         _dateTimeProvider = Substitute.For<IDateTimeProvider>();
         _roleRepo = Substitute.For<IRepository<Role>>();
         _permRepo = Substitute.For<IRepository<Permission>>();
@@ -46,7 +44,6 @@ public class AssignPermissionCommandHandlerTests
             _unitOfWork,
             _currentUserService,
             _cacheService,
-            _tokenRevocationService,
             _dateTimeProvider);
     }
 
@@ -70,7 +67,7 @@ public class AssignPermissionCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_WhenValidRole_ShouldAssignAndInvalidateUserCaches()
+    public async Task Handle_WhenValidRole_ShouldAssignAndInvalidateUserCachesWithoutRevokingTokens()
     {
         var roleId = Guid.NewGuid();
         var permId = Guid.NewGuid();
@@ -89,7 +86,6 @@ public class AssignPermissionCommandHandlerTests
         result.Succeeded.Should().BeTrue();
         await _rolePermRepo.Received(1).AddAsync(Arg.Any<RolePermission>(), Arg.Any<CancellationToken>());
         await _cacheService.Received(1).RemoveAsync($"permissions:{userId}", Arg.Any<CancellationToken>());
-        await _tokenRevocationService.Received(1).RevokeAsync(userId, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
-        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _unitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 }
