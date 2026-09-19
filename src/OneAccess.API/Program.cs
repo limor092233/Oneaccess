@@ -60,6 +60,8 @@ app.UseMiddleware<SetupGuardMiddleware>();
 // 10. Endpoints
 app.MapSetupEndpoints();
 app.MapAuthEndpoints();
+app.MapUserEndpoints();
+app.MapRoleEndpoints();
 app.MapJwksEndpoints();
 app.MapOneAccessHealthChecks(builder.Configuration);
 
