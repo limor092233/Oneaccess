@@ -30,6 +30,9 @@ public class SubSystemConfiguration : IEntityTypeConfiguration<SubSystem>
             .IsRequired()
             .HasMaxLength(100);
 
+        builder.HasIndex(s => s.Audience)
+            .IsUnique();
+
         builder.Property(s => s.IsActive)
             .IsRequired();
     }
