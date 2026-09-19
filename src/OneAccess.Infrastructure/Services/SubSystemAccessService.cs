@@ -60,15 +60,16 @@ public class SubSystemAccessService : ISubSystemAccessService
         else
         {
             // 2. Check per-user override
-            var userOverrides = await (from usa in _readDbContext.UserSubSystemAccesses
-                                       join s in _readDbContext.SubSystems on usa.SubSystemId equals s.Id
-                                       where usa.UserId == userId && s.IsActive
-                                       select s)
-                                       .ToListAsync(ct);
+            var hasUserOverrides = await _readDbContext.UserSubSystemAccesses
+                .AnyAsync(usa => usa.UserId == userId, ct);
 
-            if (userOverrides.Count != 0)
+            if (hasUserOverrides)
             {
-                result = userOverrides;
+                result = await (from usa in _readDbContext.UserSubSystemAccesses
+                                join s in _readDbContext.SubSystems on usa.SubSystemId equals s.Id
+                                where usa.UserId == userId && s.IsActive
+                                select s)
+                                .ToListAsync(ct);
             }
             else
             {
@@ -78,16 +79,17 @@ public class SubSystemAccessService : ISubSystemAccessService
                     .Select(ur => ur.RoleId)
                     .ToListAsync(ct);
 
-                var roleRestrictions = await (from rsa in _readDbContext.RoleSubSystemAccesses
-                                              join s in _readDbContext.SubSystems on rsa.SubSystemId equals s.Id
-                                              where userRoleIds.Contains(rsa.RoleId) && s.IsActive
-                                              select s)
-                                              .Distinct()
-                                              .ToListAsync(ct);
+                var hasRoleRestrictions = await _readDbContext.RoleSubSystemAccesses
+                    .AnyAsync(rsa => userRoleIds.Contains(rsa.RoleId), ct);
 
-                if (roleRestrictions.Count != 0)
+                if (hasRoleRestrictions)
                 {
-                    result = roleRestrictions;
+                    result = await (from rsa in _readDbContext.RoleSubSystemAccesses
+                                    join s in _readDbContext.SubSystems on rsa.SubSystemId equals s.Id
+                                    where userRoleIds.Contains(rsa.RoleId) && s.IsActive
+                                    select s)
+                                    .Distinct()
+                                    .ToListAsync(ct);
                 }
                 else
                 {

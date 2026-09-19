@@ -243,5 +243,64 @@ public class Step5cLiveVerificationTests : IClassFixture<OneAccessApiFactory>
         _output.WriteLine($"POST /api/roles/{adminRole.Id}/permissions (rolesubsystem.assign) -> Status: {(int)assignNonDelegableResp.StatusCode} {assignNonDelegableResp.StatusCode}\nResponse: {assignNonDelegableContent}");
         assignNonDelegableResp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         assignNonDelegableContent.Should().Contain("NonDelegablePermission");
+
+        // =========================================================================
+        // SCENARIO 6: UpdateSubSystemCommand & IsActive Toggling and Visibility Verification
+        // =========================================================================
+        _output.WriteLine("\n=== SCENARIO 6: UpdateSubSystem & IsActive Toggling ===");
+        // Step 6a: Update Name, BaseUrl, and set IsActive = false on SYS1
+        var update1Resp = await sysAdminClient.PutAsJsonAsync($"/api/subsystems/{sys1.Id}", new UpdateSubSystemRequest(
+            "System One CRM (Maintenance)",
+            "https://crm-maint.local",
+            "crm.api",
+            false
+        ));
+        var update1Content = await update1Resp.Content.ReadAsStringAsync();
+        _output.WriteLine($"PUT /api/subsystems/{sys1.Id} (IsActive=false) -> Status: {(int)update1Resp.StatusCode} {update1Resp.StatusCode}\nResponse: {update1Content}");
+        update1Resp.StatusCode.Should().Be(HttpStatusCode.OK);
+        var updatedSys1 = await update1Resp.Content.ReadFromJsonAsync<UpdateSubSystemResponse>(_jsonOptions);
+        updatedSys1.Should().NotBeNull();
+        updatedSys1!.Name.Should().Be("System One CRM (Maintenance)");
+        updatedSys1.BaseUrl.Should().Be("https://crm-maint.local");
+        updatedSys1.IsActive.Should().BeFalse();
+
+        // Step 6b: Confirm GET /api/subsystems (admin list) STILL contains SYS1 (with isActive=false)
+        var adminListAfterDeactResp = await sysAdminClient.GetAsync("/api/subsystems");
+        var adminListAfterDeactContent = await adminListAfterDeactResp.Content.ReadAsStringAsync();
+        _output.WriteLine($"GET /api/subsystems (Admin list after deactivation) -> Status: {(int)adminListAfterDeactResp.StatusCode} {adminListAfterDeactResp.StatusCode}\nResponse: {adminListAfterDeactContent}");
+        adminListAfterDeactResp.StatusCode.Should().Be(HttpStatusCode.OK);
+        var adminListAfterDeact = await adminListAfterDeactResp.Content.ReadFromJsonAsync<List<SubSystemDto>>(_jsonOptions);
+        adminListAfterDeact.Should().Contain(s => s.Code == "SYS1" && !s.IsActive);
+
+        // Step 6c: Confirm GET /api/subsystems/mine for standarduser5c (role-restricted to SYS1) now returns [] (empty) because SYS1 is inactive
+        var user1MineAfterDeactResp = await user1Client.GetAsync("/api/subsystems/mine");
+        var user1MineAfterDeactContent = await user1MineAfterDeactResp.Content.ReadAsStringAsync();
+        _output.WriteLine($"GET /api/subsystems/mine (standarduser5c after SYS1 deactivated) -> Status: {(int)user1MineAfterDeactResp.StatusCode} {user1MineAfterDeactResp.StatusCode}\nResponse: {user1MineAfterDeactContent}");
+        user1MineAfterDeactResp.StatusCode.Should().Be(HttpStatusCode.OK);
+        var user1MineAfterDeact = await user1MineAfterDeactResp.Content.ReadFromJsonAsync<List<SubSystemDto>>(_jsonOptions);
+        user1MineAfterDeact.Should().BeEmpty();
+
+        // Step 6d: Reactivate SYS1 via PUT /api/subsystems/{id} (IsActive=true)
+        var update2Resp = await sysAdminClient.PutAsJsonAsync($"/api/subsystems/{sys1.Id}", new UpdateSubSystemRequest(
+            "System One CRM",
+            "https://crm.local",
+            "crm.api",
+            true
+        ));
+        var update2Content = await update2Resp.Content.ReadAsStringAsync();
+        _output.WriteLine($"PUT /api/subsystems/{sys1.Id} (IsActive=true) -> Status: {(int)update2Resp.StatusCode} {update2Resp.StatusCode}\nResponse: {update2Content}");
+        update2Resp.StatusCode.Should().Be(HttpStatusCode.OK);
+        var reactivatedSys1 = await update2Resp.Content.ReadFromJsonAsync<UpdateSubSystemResponse>(_jsonOptions);
+        reactivatedSys1.Should().NotBeNull();
+        reactivatedSys1!.IsActive.Should().BeTrue();
+
+        // Step 6e: Confirm GET /api/subsystems/mine for standarduser5c once again returns SYS1
+        var user1MineAfterReactResp = await user1Client.GetAsync("/api/subsystems/mine");
+        var user1MineAfterReactContent = await user1MineAfterReactResp.Content.ReadAsStringAsync();
+        _output.WriteLine($"GET /api/subsystems/mine (standarduser5c after SYS1 reactivated) -> Status: {(int)user1MineAfterReactResp.StatusCode} {user1MineAfterReactResp.StatusCode}\nResponse: {user1MineAfterReactContent}");
+        user1MineAfterReactResp.StatusCode.Should().Be(HttpStatusCode.OK);
+        var user1MineAfterReact = await user1MineAfterReactResp.Content.ReadFromJsonAsync<List<SubSystemDto>>(_jsonOptions);
+        user1MineAfterReact.Should().HaveCount(1);
+        user1MineAfterReact!.Single().Code.Should().Be("SYS1");
     }
 }
