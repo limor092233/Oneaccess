@@ -27,7 +27,7 @@ public class SubSystemAccessService : ISubSystemAccessService
 
     public async Task<IReadOnlyList<SubSystem>> GetAccessibleSubSystemsAsync(Guid userId, CancellationToken ct = default)
     {
-        var cacheKey = $"subsystem_access:{userId}";
+        var cacheKey = $"subsystems:{userId}";
         var cached = await _cacheService.GetAsync<List<SubSystemSummary>>(cacheKey, ct);
         if (cached != null)
         {

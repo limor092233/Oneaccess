@@ -151,6 +151,7 @@ OneAccess/
 │   │   │   │   └── Commands/RevokePermission/
 │   │   │   ├── SubSystems/
 │   │   │   │   ├── Commands/RegisterSubSystem/
+│   │   │   │   ├── Commands/UpdateSubSystem/
 │   │   │   │   ├── Commands/AssignRoleSubSystemAccess/
 │   │   │   │   ├── Commands/RevokeRoleSubSystemAccess/
 │   │   │   │   ├── Commands/AssignUserSubSystemAccess/
@@ -682,6 +683,7 @@ Order matters:
 | GET | `/api/subsystems` | `subsystem.view` | List all registered sub-systems (admin management view — distinct from `/mine` below) |
 | GET | `/api/subsystems/mine` | authenticated | The caller's effective, resolved sub-system list (Section 5, "Sub-System Visibility") |
 | POST | `/api/subsystems` | `subsystem.register` | Register a sub-system |
+| PUT | `/api/subsystems/{id}` | `subsystem.update` | Update a sub-system (name, baseUrl, audience, isActive) |
 | GET | `/api/roles/{id}/subsystems` | `subsystem.view` | List a Role's configured sub-system restriction, if any |
 | POST | `/api/roles/{id}/subsystems` | `rolesubsystem.assign` | Add a SubSystem to a Role's allow-list (rejected for the `System Administrator` role) |
 | DELETE | `/api/roles/{id}/subsystems/{subSystemId}` | `rolesubsystem.revoke` | Remove a SubSystem from a Role's allow-list |

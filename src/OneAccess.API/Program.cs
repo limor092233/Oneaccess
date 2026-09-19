@@ -64,6 +64,7 @@ app.MapUserEndpoints();
 app.MapRoleEndpoints();
 app.MapDivisionEndpoints();
 app.MapSectionEndpoints();
+app.MapSubSystemEndpoints();
 app.MapJwksEndpoints();
 app.MapOneAccessHealthChecks(builder.Configuration);
 
