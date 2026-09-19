@@ -66,6 +66,32 @@ public class AssignPermissionCommandHandlerTests
         result.ErrorCode.Should().Be("SystemAdminPermissionsImmutable");
     }
 
+    [Theory]
+    [InlineData("division.create")]
+    [InlineData("division.update")]
+    [InlineData("division.delete")]
+    [InlineData("userdivision.assign")]
+    [InlineData("userdivision.revoke")]
+    [InlineData("audit.view")]
+    [InlineData("role.create")]
+    public async Task Handle_WhenPermissionIsNonDelegable_ShouldRejectWithBadRequest(string permCode)
+    {
+        var roleId = Guid.NewGuid();
+        var permId = Guid.NewGuid();
+        var role = new Role { Id = roleId, Name = "Administrator", IsSystemRole = false };
+        var perm = new Permission { Id = permId, Code = permCode };
+
+        _roleRepo.GetByIdAsync(roleId, Arg.Any<CancellationToken>()).Returns(role);
+        _permRepo.GetByIdAsync(permId, Arg.Any<CancellationToken>()).Returns(perm);
+
+        var command = new AssignPermissionCommand(roleId, permId);
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        result.Succeeded.Should().BeFalse();
+        result.StatusCode.Should().Be(400);
+        result.ErrorCode.Should().Be("NonDelegablePermission");
+    }
+
     [Fact]
     public async Task Handle_WhenValidRole_ShouldAssignAndInvalidateUserCachesWithoutRevokingTokens()
     {

@@ -8,6 +8,27 @@ namespace OneAccess.Application.Features.RolePermissions.Commands.AssignPermissi
 
 public class AssignPermissionCommandHandler : IRequestHandler<AssignPermissionCommand, Result>
 {
+    private static readonly HashSet<string> NonDelegablePermissions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "division.create",
+        "division.update",
+        "division.delete",
+        "userdivision.assign",
+        "userdivision.revoke",
+        "rolesubsystem.assign",
+        "rolesubsystem.revoke",
+        "usersubsystem.assign",
+        "usersubsystem.revoke",
+        "subsystem.register",
+        "subsystem.update",
+        "role.create",
+        "role.update",
+        "role.delete",
+        "rolepermission.assign",
+        "rolepermission.revoke",
+        "audit.view"
+    };
+
     private readonly IReadDbContext _readDbContext;
     private readonly IUnitOfWork _unitOfWork;
     private readonly ICurrentUserService _currentUserService;
@@ -48,6 +69,12 @@ public class AssignPermissionCommandHandler : IRequestHandler<AssignPermissionCo
         if (string.Equals(role.Name, SystemRoles.SystemAdministrator, StringComparison.OrdinalIgnoreCase))
         {
             return Result.Failure("Permissions for System Administrator role cannot be modified.", "SystemAdminPermissionsImmutable", 400);
+        }
+
+        // Guard: Non-delegable system permissions cannot be assigned to any role
+        if (NonDelegablePermissions.Contains(permission.Code))
+        {
+            return Result.Failure($"Permission '{permission.Code}' is a non-delegable system permission and cannot be assigned to roles.", "NonDelegablePermission", 400);
         }
 
         var exists = _readDbContext.RolePermissions

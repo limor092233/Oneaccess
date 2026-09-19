@@ -203,4 +203,85 @@ public class Step5bLiveVerificationTests : IClassFixture<OneAccessApiFactory>
         divsAfterRevoke.Should().BeEmpty();
         _output.WriteLine($"[10b] engadmin5b now sees 0 divisions after revocation");
     }
+
+    [Fact]
+    public async Task Verify_Requested_Case1_And_Case2_Live_Http()
+    {
+        var (sysAdminClient, sysAdminUserId) = await SetupAndLoginRootSysAdminAsync();
+
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<OneAccessDbContext>();
+
+        // Create Division 1
+        var createDivResp = await sysAdminClient.PostAsJsonAsync("/api/divisions", new CreateDivisionCommand(
+            "Division 1",
+            "Initial Division 1"
+        ));
+        var div1 = await createDivResp.Content.ReadFromJsonAsync<CreateDivisionResponse>(_jsonOptions);
+
+        // Create Section referencing Division 1
+        var createSecResp = await sysAdminClient.PostAsJsonAsync("/api/sections", new CreateSectionCommand(
+            div1!.Id,
+            "Section 1",
+            "Child Section"
+        ));
+        var sec1 = await createSecResp.Content.ReadFromJsonAsync<CreateSectionResponse>(_jsonOptions);
+
+        // -------------------------------------------------------------
+        // Case 1: DELETE Division 1 that still has a Section -> 409
+        // -------------------------------------------------------------
+        var deleteDivResp = await sysAdminClient.DeleteAsync($"/api/divisions/{div1.Id}");
+        var deleteDivBody = await deleteDivResp.Content.ReadAsStringAsync();
+
+        _output.WriteLine("=== CASE 1: DELETE Division with referencing Section ===");
+        _output.WriteLine($"REQUEST: DELETE /api/divisions/{div1.Id}");
+        _output.WriteLine($"RESPONSE STATUS: {(int)deleteDivResp.StatusCode} {deleteDivResp.StatusCode}");
+        _output.WriteLine($"RESPONSE BODY:\n{deleteDivBody}");
+        _output.WriteLine("========================================================\n");
+
+        deleteDivResp.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        // -------------------------------------------------------------
+        // Setup for Case 2: Create div1admin user and assign to Division 1
+        // -------------------------------------------------------------
+        var adminRole = await db.Roles.FirstAsync(r => r.Name == SystemRoles.Administrator);
+        var createAdminUserResp = await sysAdminClient.PostAsJsonAsync("/api/users", new CreateUserCommand(
+            "div1admin",
+            "div1admin@oneaccess.local",
+            "Div1Admin123!",
+            "Division 1 Admin",
+            div1.Id,
+            sec1!.Id,
+            new List<Guid> { adminRole.Id }
+        ));
+        var div1AdminUser = await createAdminUserResp.Content.ReadFromJsonAsync<CreateUserResponse>(_jsonOptions);
+
+        // Assign div1admin to manage Division 1
+        await sysAdminClient.PostAsJsonAsync($"/api/divisions/{div1.Id}/users", new AssignUserDivisionRequest(div1AdminUser!.Id));
+
+        // Login as div1admin (non-SysAdmin Administrator holding only ordinary delegated permissions)
+        var div1AdminClient = _factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions
+        {
+            HandleCookies = true,
+            BaseAddress = new Uri("https://localhost")
+        });
+        var loginResp = await div1AdminClient.PostAsJsonAsync("/api/auth/login", new LoginCommand("div1admin", "Div1Admin123!"));
+        loginResp.EnsureSuccessStatusCode();
+
+        // -------------------------------------------------------------
+        // Case 2: As div1admin, attempt PUT /api/divisions/{own-division-id} -> 403 Forbidden
+        // -------------------------------------------------------------
+        var updateRequest = new UpdateDivisionRequest("Renamed Division 1", "Attempted by div1admin");
+        var updateDivResp = await div1AdminClient.PutAsJsonAsync($"/api/divisions/{div1.Id}", updateRequest);
+        var updateDivBody = await updateDivResp.Content.ReadAsStringAsync();
+
+        _output.WriteLine("=== CASE 2: div1admin attempts PUT /api/divisions/{own-division-id} ===");
+        _output.WriteLine($"REQUEST: PUT /api/divisions/{div1.Id}");
+        _output.WriteLine($"REQUEST BODY:\n{JsonSerializer.Serialize(updateRequest, _jsonOptions)}");
+        _output.WriteLine($"RESPONSE STATUS: {(int)updateDivResp.StatusCode} {updateDivResp.StatusCode}");
+        _output.WriteLine($"RESPONSE BODY:\n{updateDivBody}");
+        _output.WriteLine("======================================================================\n");
+
+        updateDivResp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
 }
