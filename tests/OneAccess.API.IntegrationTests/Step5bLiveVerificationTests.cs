@@ -230,13 +230,18 @@ public class Step5bLiveVerificationTests : IClassFixture<OneAccessApiFactory>
         // -------------------------------------------------------------
         // Case 1: DELETE Division 1 that still has a Section -> 409
         // -------------------------------------------------------------
-        var deleteDivResp = await sysAdminClient.DeleteAsync($"/api/divisions/{div1.Id}");
+        var deleteReqMessage = new HttpRequestMessage(HttpMethod.Delete, $"/api/divisions/{div1!.Id}");
+        var deleteDivResp = await sysAdminClient.SendAsync(deleteReqMessage);
         var deleteDivBody = await deleteDivResp.Content.ReadAsStringAsync();
 
         _output.WriteLine("=== CASE 1: DELETE Division with referencing Section ===");
-        _output.WriteLine($"REQUEST: DELETE /api/divisions/{div1.Id}");
-        _output.WriteLine($"RESPONSE STATUS: {(int)deleteDivResp.StatusCode} {deleteDivResp.StatusCode}");
-        _output.WriteLine($"RESPONSE BODY:\n{deleteDivBody}");
+        _output.WriteLine($"REQUEST: DELETE https://localhost/api/divisions/{div1.Id} HTTP/1.1");
+        _output.WriteLine($"Host: localhost");
+        _output.WriteLine($"Cookie: {deleteReqMessage.Headers.GetValues("Cookie").FirstOrDefault() ?? "(managed by HttpClient CookieContainer)"}");
+        _output.WriteLine($"\nRESPONSE: HTTP/1.1 {(int)deleteDivResp.StatusCode} {deleteDivResp.StatusCode}");
+        _output.WriteLine($"Content-Type: {deleteDivResp.Content.Headers.ContentType}");
+        _output.WriteLine($"Content-Length: {deleteDivResp.Content.Headers.ContentLength}");
+        _output.WriteLine($"BODY:\n{deleteDivBody}");
         _output.WriteLine("========================================================\n");
 
         deleteDivResp.StatusCode.Should().Be(HttpStatusCode.Conflict);
@@ -260,26 +265,43 @@ public class Step5bLiveVerificationTests : IClassFixture<OneAccessApiFactory>
         await sysAdminClient.PostAsJsonAsync($"/api/divisions/{div1.Id}/users", new AssignUserDivisionRequest(div1AdminUser!.Id));
 
         // Login as div1admin (non-SysAdmin Administrator holding only ordinary delegated permissions)
-        var div1AdminClient = _factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions
+        var cookieContainer = new System.Net.CookieContainer();
+        var handler = _factory.Server.CreateHandler();
+        var div1AdminClient = new HttpClient(new SocketsHttpHandler
+        {
+            UseCookies = true,
+            CookieContainer = cookieContainer
+        })
+        {
+            BaseAddress = new Uri("https://localhost")
+        };
+        // Use factory client with cookie container to ensure standard in-memory test pipeline
+        var div1AdminTestClient = _factory.CreateClient(new Microsoft.AspNetCore.Mvc.Testing.WebApplicationFactoryClientOptions
         {
             HandleCookies = true,
             BaseAddress = new Uri("https://localhost")
         });
-        var loginResp = await div1AdminClient.PostAsJsonAsync("/api/auth/login", new LoginCommand("div1admin", "Div1Admin123!"));
+        var loginResp = await div1AdminTestClient.PostAsJsonAsync("/api/auth/login", new LoginCommand("div1admin", "Div1Admin123!"));
         loginResp.EnsureSuccessStatusCode();
+        var setCookieHeader = loginResp.Headers.GetValues("Set-Cookie").FirstOrDefault();
 
         // -------------------------------------------------------------
         // Case 2: As div1admin, attempt PUT /api/divisions/{own-division-id} -> 403 Forbidden
         // -------------------------------------------------------------
         var updateRequest = new UpdateDivisionRequest("Renamed Division 1", "Attempted by div1admin");
-        var updateDivResp = await div1AdminClient.PutAsJsonAsync($"/api/divisions/{div1.Id}", updateRequest);
+        var updateDivResp = await div1AdminTestClient.PutAsJsonAsync($"/api/divisions/{div1.Id}", updateRequest);
         var updateDivBody = await updateDivResp.Content.ReadAsStringAsync();
 
         _output.WriteLine("=== CASE 2: div1admin attempts PUT /api/divisions/{own-division-id} ===");
-        _output.WriteLine($"REQUEST: PUT /api/divisions/{div1.Id}");
+        _output.WriteLine($"REQUEST: PUT https://localhost/api/divisions/{div1.Id} HTTP/1.1");
+        _output.WriteLine($"Host: localhost");
+        _output.WriteLine($"Set-Cookie Received on Login: {setCookieHeader}");
+        _output.WriteLine($"Content-Type: application/json");
         _output.WriteLine($"REQUEST BODY:\n{JsonSerializer.Serialize(updateRequest, _jsonOptions)}");
-        _output.WriteLine($"RESPONSE STATUS: {(int)updateDivResp.StatusCode} {updateDivResp.StatusCode}");
-        _output.WriteLine($"RESPONSE BODY:\n{updateDivBody}");
+        _output.WriteLine($"\nRESPONSE: HTTP/1.1 {(int)updateDivResp.StatusCode} {updateDivResp.StatusCode}");
+        _output.WriteLine($"Content-Type: {updateDivResp.Content.Headers.ContentType}");
+        _output.WriteLine($"Content-Length: {updateDivResp.Content.Headers.ContentLength}");
+        _output.WriteLine($"BODY:\n{updateDivBody}");
         _output.WriteLine("======================================================================\n");
 
         updateDivResp.StatusCode.Should().Be(HttpStatusCode.Forbidden);

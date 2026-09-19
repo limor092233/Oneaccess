@@ -56,6 +56,7 @@ public static class WebApplicationExtensions
 
         services.AddAuthorization();
         services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
+        services.AddSingleton<IAuthorizationMiddlewareResultHandler, OneAccessAuthorizationMiddlewareResultHandler>();
 
         // 2. CORS configuration from appsettings.json
         var corsSection = configuration.GetSection(CorsOptions.SectionName);
