@@ -1,7 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using OneAccess.API.Authorization;
-using OneAccess.Application.Common.Models;
+using OneAccess.API.Common;
 using OneAccess.Application.Features.Users.Commands.AssignRole;
 using OneAccess.Application.Features.Users.Commands.CreateUser;
 using OneAccess.Application.Features.Users.Commands.DeleteUser;
@@ -30,7 +30,7 @@ public static class UserEndpoints
             CancellationToken ct = default) =>
         {
             var result = await sender.Send(new GetUsersQuery(pageNumber, pageSize, search), ct);
-            return ToHttpResult(result);
+            return result.ToHttpResult();
         })
         .RequirePermission("user.view")
         .WithName("GetUsers");
@@ -39,7 +39,7 @@ public static class UserEndpoints
         group.MapGet("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) =>
         {
             var result = await sender.Send(new GetUserByIdQuery(id), ct);
-            return ToHttpResult(result);
+            return result.ToHttpResult();
         })
         .RequirePermission("user.view")
         .WithName("GetUserById");
@@ -50,7 +50,7 @@ public static class UserEndpoints
             var result = await sender.Send(command, ct);
             if (!result.Succeeded)
             {
-                return ToHttpResult(result);
+                return result.ToHttpResult();
             }
             return Results.Created($"/api/users/{result.Value!.Id}", result.Value);
         })
@@ -62,7 +62,7 @@ public static class UserEndpoints
         {
             var command = new UpdateUserCommand(id, request.Email, request.FullName, request.DivisionId, request.SectionId, request.Status);
             var result = await sender.Send(command, ct);
-            return ToHttpResult(result);
+            return result.ToHttpResult();
         })
         .RequirePermission("user.update")
         .WithName("UpdateUser");
@@ -71,7 +71,7 @@ public static class UserEndpoints
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) =>
         {
             var result = await sender.Send(new DeleteUserCommand(id), ct);
-            return ToHttpResult(result);
+            return result.ToHttpResult();
         })
         .RequirePermission("user.delete")
         .WithName("DeleteUser");
@@ -81,32 +81,12 @@ public static class UserEndpoints
         {
             var command = new AssignRoleCommand(id, request.RoleId);
             var result = await sender.Send(command, ct);
-            return ToHttpResult(result);
+            return result.ToHttpResult();
         })
         .RequirePermission("user.update")
         .WithName("AssignRole");
 
         return app;
-    }
-
-    private static IResult ToHttpResult(Result result)
-    {
-        if (result.Succeeded)
-        {
-            return Results.Ok(new { message = "Success" });
-        }
-
-        return Results.Json(new { error = result.Error, errorCode = result.ErrorCode }, statusCode: result.StatusCode);
-    }
-
-    private static IResult ToHttpResult<T>(Result<T> result)
-    {
-        if (result.Succeeded)
-        {
-            return Results.Ok(result.Value);
-        }
-
-        return Results.Json(new { error = result.Error, errorCode = result.ErrorCode }, statusCode: result.StatusCode);
     }
 }
 

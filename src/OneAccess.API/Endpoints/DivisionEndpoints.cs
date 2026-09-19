@@ -1,7 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using OneAccess.API.Authorization;
-using OneAccess.Application.Common.Models;
+using OneAccess.API.Common;
 using OneAccess.Application.Features.Divisions.Commands.AssignUserDivision;
 using OneAccess.Application.Features.Divisions.Commands.CreateDivision;
 using OneAccess.Application.Features.Divisions.Commands.DeleteDivision;
@@ -27,7 +27,7 @@ public static class DivisionEndpoints
         group.MapGet("/", async (ISender sender, CancellationToken ct) =>
         {
             var result = await sender.Send(new GetDivisionsQuery(), ct);
-            return ToHttpResult(result);
+            return result.ToHttpResult();
         })
         .RequirePermission("division.view")
         .WithName("GetDivisions");
@@ -38,7 +38,7 @@ public static class DivisionEndpoints
             var result = await sender.Send(command, ct);
             if (!result.Succeeded)
             {
-                return ToHttpResult(result);
+                return result.ToHttpResult();
             }
             return Results.Created($"/api/divisions/{result.Value!.Id}", result.Value);
         })
@@ -50,7 +50,7 @@ public static class DivisionEndpoints
         {
             var command = new UpdateDivisionCommand(id, request.Name, request.Description);
             var result = await sender.Send(command, ct);
-            return ToHttpResult(result);
+            return result.ToHttpResult();
         })
         .RequirePermission("division.update")
         .WithName("UpdateDivision");
@@ -59,7 +59,7 @@ public static class DivisionEndpoints
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) =>
         {
             var result = await sender.Send(new DeleteDivisionCommand(id), ct);
-            return ToHttpResult(result);
+            return result.ToHttpResult();
         })
         .RequirePermission("division.delete")
         .WithName("DeleteDivision");
@@ -68,7 +68,7 @@ public static class DivisionEndpoints
         group.MapGet("/{id:guid}/users", async (Guid id, ISender sender, CancellationToken ct) =>
         {
             var result = await sender.Send(new GetDivisionAdministratorsQuery(id), ct);
-            return ToHttpResult(result);
+            return result.ToHttpResult();
         })
         .RequirePermission("division.view")
         .WithName("GetDivisionAdministrators");
@@ -78,7 +78,7 @@ public static class DivisionEndpoints
         {
             var command = new AssignUserDivisionCommand(id, request.UserId);
             var result = await sender.Send(command, ct);
-            return ToHttpResult(result);
+            return result.ToHttpResult();
         })
         .RequirePermission("userdivision.assign")
         .WithName("AssignUserDivision");
@@ -88,7 +88,7 @@ public static class DivisionEndpoints
         {
             var command = new RevokeUserDivisionCommand(id, userId);
             var result = await sender.Send(command, ct);
-            return ToHttpResult(result);
+            return result.ToHttpResult();
         })
         .RequirePermission("userdivision.revoke")
         .WithName("RevokeUserDivision");
@@ -97,32 +97,12 @@ public static class DivisionEndpoints
         group.MapGet("/{id:guid}/sections", async (Guid id, ISender sender, CancellationToken ct) =>
         {
             var result = await sender.Send(new GetSectionsByDivisionQuery(id), ct);
-            return ToHttpResult(result);
+            return result.ToHttpResult();
         })
         .RequirePermission("section.view")
         .WithName("GetSectionsByDivision");
 
         return app;
-    }
-
-    private static IResult ToHttpResult(Result result)
-    {
-        if (result.Succeeded)
-        {
-            return Results.Ok(new { message = "Success" });
-        }
-
-        return Results.Json(new { error = result.Error, errorCode = result.ErrorCode }, statusCode: result.StatusCode);
-    }
-
-    private static IResult ToHttpResult<T>(Result<T> result)
-    {
-        if (result.Succeeded)
-        {
-            return Results.Ok(result.Value);
-        }
-
-        return Results.Json(new { error = result.Error, errorCode = result.ErrorCode }, statusCode: result.StatusCode);
     }
 }
 

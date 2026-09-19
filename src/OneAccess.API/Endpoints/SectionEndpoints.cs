@@ -1,7 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using OneAccess.API.Authorization;
-using OneAccess.Application.Common.Models;
+using OneAccess.API.Common;
 using OneAccess.Application.Features.Sections.Commands.CreateSection;
 using OneAccess.Application.Features.Sections.Commands.DeleteSection;
 using OneAccess.Application.Features.Sections.Commands.UpdateSection;
@@ -24,7 +24,7 @@ public static class SectionEndpoints
             var result = await sender.Send(command, ct);
             if (!result.Succeeded)
             {
-                return ToHttpResult(result);
+                return result.ToHttpResult();
             }
             return Results.Created($"/api/sections/{result.Value!.Id}", result.Value);
         })
@@ -36,7 +36,7 @@ public static class SectionEndpoints
         {
             var command = new UpdateSectionCommand(id, request.Name, request.Description);
             var result = await sender.Send(command, ct);
-            return ToHttpResult(result);
+            return result.ToHttpResult();
         })
         .RequirePermission("section.update")
         .WithName("UpdateSection");
@@ -45,32 +45,12 @@ public static class SectionEndpoints
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) =>
         {
             var result = await sender.Send(new DeleteSectionCommand(id), ct);
-            return ToHttpResult(result);
+            return result.ToHttpResult();
         })
         .RequirePermission("section.delete")
         .WithName("DeleteSection");
 
         return app;
-    }
-
-    private static IResult ToHttpResult(Result result)
-    {
-        if (result.Succeeded)
-        {
-            return Results.Ok(new { message = "Success" });
-        }
-
-        return Results.Json(new { error = result.Error, errorCode = result.ErrorCode }, statusCode: result.StatusCode);
-    }
-
-    private static IResult ToHttpResult<T>(Result<T> result)
-    {
-        if (result.Succeeded)
-        {
-            return Results.Ok(result.Value);
-        }
-
-        return Results.Json(new { error = result.Error, errorCode = result.ErrorCode }, statusCode: result.StatusCode);
     }
 }
 

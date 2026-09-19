@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using OneAccess.API.Common;
 using OneAccess.Application.Features.Auth.Commands.Login;
 using OneAccess.Application.Features.Auth.Commands.Logout;
 using OneAccess.Application.Features.Auth.Commands.RefreshToken;
@@ -33,7 +34,7 @@ public static class AuthEndpoints
             var result = await sender.Send(command, ct);
             if (!result.Succeeded || result.Value == null)
             {
-                return Results.BadRequest(result.Error);
+                return result.ToHttpResult();
             }
 
             var user = result.Value.User;
@@ -78,7 +79,7 @@ public static class AuthEndpoints
             CancellationToken ct) =>
         {
             var result = await sender.Send(command, ct);
-            return result.Succeeded ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
+            return result.ToHttpResult();
         })
         .RequireRateLimiting("Refresh")
         .WithName("RefreshToken");
@@ -98,7 +99,7 @@ public static class AuthEndpoints
         group.MapGet("/me", async (ISender sender, CancellationToken ct) =>
         {
             var result = await sender.Send(new GetCurrentUserQuery(), ct);
-            return result.Succeeded ? Results.Ok(result.Value) : Results.Unauthorized();
+            return result.ToHttpResult();
         })
         .RequireAuthorization()
         .WithName("GetCurrentUser");

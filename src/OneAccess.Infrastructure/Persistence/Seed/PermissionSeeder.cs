@@ -9,47 +9,47 @@ namespace OneAccess.Infrastructure.Persistence.Seed;
 /// </summary>
 public static class PermissionSeeder
 {
-    public static readonly (string Code, string Module, string Description)[] AllPermissions = new[]
+    public static readonly (string Code, string Module, string Description, bool IsDelegable)[] AllPermissions = new[]
     {
-        ("user.view", "Users", "View users"),
-        ("user.create", "Users", "Create new users"),
-        ("user.update", "Users", "Update existing users and assign roles"),
-        ("user.delete", "Users", "Deactivate/delete users"),
+        ("user.view", "Users", "View users", true),
+        ("user.create", "Users", "Create new users", true),
+        ("user.update", "Users", "Update existing users and assign roles", true),
+        ("user.delete", "Users", "Deactivate/delete users", true),
 
-        ("role.view", "Roles", "View roles"),
-        ("role.create", "Roles", "Create new roles"),
-        ("role.update", "Roles", "Update existing roles"),
-        ("role.delete", "Roles", "Delete roles"),
+        ("role.view", "Roles", "View roles", true),
+        ("role.create", "Roles", "Create new roles", false),
+        ("role.update", "Roles", "Update existing roles", false),
+        ("role.delete", "Roles", "Delete roles", false),
 
-        ("permission.view", "Permissions", "View all available permissions"),
+        ("permission.view", "Permissions", "View all available permissions", true),
 
-        ("rolepermission.assign", "RolePermissions", "Assign permissions to roles"),
-        ("rolepermission.revoke", "RolePermissions", "Revoke permissions from roles"),
+        ("rolepermission.assign", "RolePermissions", "Assign permissions to roles", false),
+        ("rolepermission.revoke", "RolePermissions", "Revoke permissions from roles", false),
 
-        ("subsystem.view", "SubSystems", "View registered sub-systems"),
-        ("subsystem.register", "SubSystems", "Register new sub-systems"),
-        ("subsystem.update", "SubSystems", "Update sub-system configurations"),
+        ("subsystem.view", "SubSystems", "View registered sub-systems", true),
+        ("subsystem.register", "SubSystems", "Register new sub-systems", false),
+        ("subsystem.update", "SubSystems", "Update sub-system configurations", false),
 
-        ("rolesubsystem.assign", "RoleSubSystemAccess", "Add sub-system to role allow-list"),
-        ("rolesubsystem.revoke", "RoleSubSystemAccess", "Remove sub-system from role allow-list"),
+        ("rolesubsystem.assign", "RoleSubSystemAccess", "Add sub-system to role allow-list", false),
+        ("rolesubsystem.revoke", "RoleSubSystemAccess", "Remove sub-system from role allow-list", false),
 
-        ("usersubsystem.assign", "UserSubSystemAccess", "Add sub-system to user override allow-list"),
-        ("usersubsystem.revoke", "UserSubSystemAccess", "Remove sub-system from user override allow-list"),
+        ("usersubsystem.assign", "UserSubSystemAccess", "Add sub-system to user override allow-list", false),
+        ("usersubsystem.revoke", "UserSubSystemAccess", "Remove sub-system from user override allow-list", false),
 
-        ("division.view", "Divisions", "View divisions"),
-        ("division.create", "Divisions", "Create divisions"),
-        ("division.update", "Divisions", "Update divisions"),
-        ("division.delete", "Divisions", "Delete divisions"),
+        ("division.view", "Divisions", "View divisions", true),
+        ("division.create", "Divisions", "Create divisions", false),
+        ("division.update", "Divisions", "Update divisions", false),
+        ("division.delete", "Divisions", "Delete divisions", false),
 
-        ("section.view", "Sections", "View sections"),
-        ("section.create", "Sections", "Create sections"),
-        ("section.update", "Sections", "Update sections"),
-        ("section.delete", "Sections", "Delete sections"),
+        ("section.view", "Sections", "View sections", true),
+        ("section.create", "Sections", "Create sections", true),
+        ("section.update", "Sections", "Update sections", true),
+        ("section.delete", "Sections", "Delete sections", true),
 
-        ("userdivision.assign", "UserDivisionAssignment", "Assign administrator to manage division"),
-        ("userdivision.revoke", "UserDivisionAssignment", "Revoke administrator from managing division"),
+        ("userdivision.assign", "UserDivisionAssignment", "Assign administrator to manage division", false),
+        ("userdivision.revoke", "UserDivisionAssignment", "Revoke administrator from managing division", false),
 
-        ("audit.view", "Audit", "View audit trail logs (System Administrator only)")
+        ("audit.view", "Audit", "View audit trail logs (System Administrator only)", false)
     };
 
     public static async Task SeedAsync(OneAccessDbContext context, CancellationToken ct = default)
@@ -57,22 +57,35 @@ public static class PermissionSeeder
         var now = DateTime.UtcNow;
 
         // 1. Seed Permissions
-        var existingCodes = await context.Permissions.Select(p => p.Code).ToListAsync(ct);
-        var permissionsToAdd = AllPermissions
-            .Where(p => !existingCodes.Contains(p.Code))
-            .Select(p => new Permission
+        var existingPerms = await context.Permissions.ToDictionaryAsync(p => p.Code, ct);
+        var permissionsToAdd = new List<Permission>();
+
+        foreach (var def in AllPermissions)
+        {
+            if (!existingPerms.TryGetValue(def.Code, out var perm))
             {
-                Code = p.Code,
-                Module = p.Module,
-                Description = p.Description
-            })
-            .ToList();
+                permissionsToAdd.Add(new Permission
+                {
+                    Code = def.Code,
+                    Module = def.Module,
+                    Description = def.Description,
+                    IsDelegable = def.IsDelegable
+                });
+            }
+            else
+            {
+                perm.Module = def.Module;
+                perm.Description = def.Description;
+                perm.IsDelegable = def.IsDelegable;
+            }
+        }
 
         if (permissionsToAdd.Count != 0)
         {
             await context.Permissions.AddRangeAsync(permissionsToAdd, ct);
-            await context.SaveChangesAsync(ct);
         }
+
+        await context.SaveChangesAsync(ct);
 
         // 2. Seed Default Roles
         var existingRoles = await context.Roles.ToDictionaryAsync(r => r.Name, ct);

@@ -79,7 +79,7 @@ public class AssignPermissionCommandHandlerTests
         var roleId = Guid.NewGuid();
         var permId = Guid.NewGuid();
         var role = new Role { Id = roleId, Name = "Administrator", IsSystemRole = false };
-        var perm = new Permission { Id = permId, Code = permCode };
+        var perm = new Permission { Id = permId, Code = permCode, IsDelegable = false };
 
         _roleRepo.GetByIdAsync(roleId, Arg.Any<CancellationToken>()).Returns(role);
         _permRepo.GetByIdAsync(permId, Arg.Any<CancellationToken>()).Returns(perm);
@@ -99,7 +99,7 @@ public class AssignPermissionCommandHandlerTests
         var permId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         var role = new Role { Id = roleId, Name = "Administrator", IsSystemRole = false };
-        var perm = new Permission { Id = permId, Code = "custom.perm" };
+        var perm = new Permission { Id = permId, Code = "custom.perm", IsDelegable = true };
 
         _roleRepo.GetByIdAsync(roleId, Arg.Any<CancellationToken>()).Returns(role);
         _permRepo.GetByIdAsync(permId, Arg.Any<CancellationToken>()).Returns(perm);

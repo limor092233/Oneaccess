@@ -22,6 +22,11 @@ public class Permission : BaseEntity
     /// </summary>
     public string Description { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Gets or sets whether this permission is delegable to non-System-Administrator roles.
+    /// </summary>
+    public bool IsDelegable { get; set; } = true;
+
     // Navigation properties
     public ICollection<RolePermission> RolePermissions { get; set; } = new List<RolePermission>();
 }

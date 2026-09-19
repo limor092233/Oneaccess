@@ -305,5 +305,26 @@ public class Step5bLiveVerificationTests : IClassFixture<OneAccessApiFactory>
         _output.WriteLine("======================================================================\n");
 
         updateDivResp.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        // -------------------------------------------------------------
+        // Case 3: System Administrator attempts PUT /api/roles/{id} to rename System Administrator role -> 400 Bad Request (ProblemDetails)
+        // -------------------------------------------------------------
+        var sysAdminRole = await db.Roles.FirstAsync(r => r.Name == SystemRoles.SystemAdministrator);
+        var renameRequest = new OneAccess.API.Endpoints.UpdateRoleRequest("Renamed System Admin", "Illegal rename attempt");
+        var renameResp = await sysAdminClient.PutAsJsonAsync($"/api/roles/{sysAdminRole.Id}", renameRequest);
+        var renameBody = await renameResp.Content.ReadAsStringAsync();
+
+        _output.WriteLine("=== CASE 3: Renaming a System Role ===");
+        _output.WriteLine($"REQUEST: PUT https://localhost/api/roles/{sysAdminRole.Id} HTTP/1.1");
+        _output.WriteLine($"Host: localhost");
+        _output.WriteLine($"Content-Type: application/json");
+        _output.WriteLine($"REQUEST BODY:\n{JsonSerializer.Serialize(renameRequest, _jsonOptions)}");
+        _output.WriteLine($"\nRESPONSE: HTTP/1.1 {(int)renameResp.StatusCode} {renameResp.StatusCode}");
+        _output.WriteLine($"Content-Type: {renameResp.Content.Headers.ContentType}");
+        _output.WriteLine($"Content-Length: {renameResp.Content.Headers.ContentLength}");
+        _output.WriteLine($"BODY:\n{renameBody}");
+        _output.WriteLine("======================================\n");
+
+        renameResp.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 }

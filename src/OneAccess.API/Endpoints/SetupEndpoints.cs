@@ -1,5 +1,6 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using OneAccess.API.Common;
 using OneAccess.Application.Features.Setup.Commands.InitializeSystemAdmin;
 using OneAccess.Application.Features.Setup.Queries.GetSetupStatus;
 
@@ -18,7 +19,7 @@ public static class SetupEndpoints
         group.MapGet("/status", async (ISender sender, CancellationToken ct) =>
         {
             var result = await sender.Send(new GetSetupStatusQuery(), ct);
-            return result.Succeeded ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
+            return result.ToHttpResult();
         })
         .AllowAnonymous()
         .WithName("GetSetupStatus");
@@ -29,7 +30,7 @@ public static class SetupEndpoints
             CancellationToken ct) =>
         {
             var result = await sender.Send(command, ct);
-            return result.Succeeded ? Results.Ok(result.Value) : Results.BadRequest(result.Error);
+            return result.ToHttpResult();
         })
         .AllowAnonymous()
         .RequireRateLimiting("Setup")

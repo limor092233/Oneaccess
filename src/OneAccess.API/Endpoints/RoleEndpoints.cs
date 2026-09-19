@@ -1,7 +1,7 @@
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using OneAccess.API.Authorization;
-using OneAccess.Application.Common.Models;
+using OneAccess.API.Common;
 using OneAccess.Application.Features.RolePermissions.Commands.AssignPermission;
 using OneAccess.Application.Features.RolePermissions.Commands.RevokePermission;
 using OneAccess.Application.Features.Roles.Commands.CreateRole;
@@ -25,7 +25,7 @@ public static class RoleEndpoints
         group.MapGet("/", async (ISender sender, CancellationToken ct) =>
         {
             var result = await sender.Send(new GetRolesQuery(), ct);
-            return ToHttpResult(result);
+            return result.ToHttpResult();
         })
         .RequirePermission("role.view")
         .WithName("GetRoles");
@@ -36,7 +36,7 @@ public static class RoleEndpoints
             var result = await sender.Send(command, ct);
             if (!result.Succeeded)
             {
-                return ToHttpResult(result);
+                return result.ToHttpResult();
             }
             return Results.Created($"/api/roles/{result.Value!.Id}", result.Value);
         })
@@ -48,7 +48,7 @@ public static class RoleEndpoints
         {
             var command = new UpdateRoleCommand(id, request.Name, request.Description);
             var result = await sender.Send(command, ct);
-            return ToHttpResult(result);
+            return result.ToHttpResult();
         })
         .RequirePermission("role.update")
         .WithName("UpdateRole");
@@ -57,7 +57,7 @@ public static class RoleEndpoints
         group.MapDelete("/{id:guid}", async (Guid id, ISender sender, CancellationToken ct) =>
         {
             var result = await sender.Send(new DeleteRoleCommand(id), ct);
-            return ToHttpResult(result);
+            return result.ToHttpResult();
         })
         .RequirePermission("role.delete")
         .WithName("DeleteRole");
@@ -67,7 +67,7 @@ public static class RoleEndpoints
         {
             var command = new AssignPermissionCommand(id, request.PermissionId);
             var result = await sender.Send(command, ct);
-            return ToHttpResult(result);
+            return result.ToHttpResult();
         })
         .RequirePermission("rolepermission.assign")
         .WithName("AssignRolePermission");
@@ -77,32 +77,12 @@ public static class RoleEndpoints
         {
             var command = new RevokePermissionCommand(id, permissionId);
             var result = await sender.Send(command, ct);
-            return ToHttpResult(result);
+            return result.ToHttpResult();
         })
         .RequirePermission("rolepermission.revoke")
         .WithName("RevokeRolePermission");
 
         return app;
-    }
-
-    private static IResult ToHttpResult(Result result)
-    {
-        if (result.Succeeded)
-        {
-            return Results.Ok(new { message = "Success" });
-        }
-
-        return Results.Json(new { error = result.Error, errorCode = result.ErrorCode }, statusCode: result.StatusCode);
-    }
-
-    private static IResult ToHttpResult<T>(Result<T> result)
-    {
-        if (result.Succeeded)
-        {
-            return Results.Ok(result.Value);
-        }
-
-        return Results.Json(new { error = result.Error, errorCode = result.ErrorCode }, statusCode: result.StatusCode);
     }
 }
 

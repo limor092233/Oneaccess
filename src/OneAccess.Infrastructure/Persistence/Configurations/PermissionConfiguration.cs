@@ -25,5 +25,9 @@ public class PermissionConfiguration : IEntityTypeConfiguration<Permission>
 
         builder.Property(p => p.Description)
             .HasMaxLength(256);
+
+        builder.Property(p => p.IsDelegable)
+            .IsRequired()
+            .HasDefaultValue(true);
     }
 }

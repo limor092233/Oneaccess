@@ -81,6 +81,7 @@ public class ExceptionHandlingMiddleware
                     .GroupBy(e => e.PropertyName)
                     .ToDictionary(g => g.Key, g => g.Select(e => e.ErrorMessage).ToArray());
                 problemDetails.Extensions["errors"] = errors;
+                problemDetails.Extensions["errorCode"] = "ValidationError";
                 break;
 
             case NotFoundException notFoundEx:
@@ -88,6 +89,7 @@ public class ExceptionHandlingMiddleware
                 problemDetails.Status = (int)HttpStatusCode.NotFound;
                 problemDetails.Title = "Not Found";
                 problemDetails.Detail = notFoundEx.Message;
+                problemDetails.Extensions["errorCode"] = "NotFound";
                 break;
 
             case DomainException domainEx:
@@ -95,6 +97,7 @@ public class ExceptionHandlingMiddleware
                 problemDetails.Status = (int)HttpStatusCode.BadRequest;
                 problemDetails.Title = "Domain Error";
                 problemDetails.Detail = domainEx.Message;
+                problemDetails.Extensions["errorCode"] = "DomainError";
                 break;
 
             case UnauthorizedAccessException:
@@ -102,6 +105,7 @@ public class ExceptionHandlingMiddleware
                 problemDetails.Status = (int)HttpStatusCode.Unauthorized;
                 problemDetails.Title = "Unauthorized";
                 problemDetails.Detail = "Authentication is required to access this resource.";
+                problemDetails.Extensions["errorCode"] = "Unauthorized";
                 break;
 
             default:
@@ -109,6 +113,7 @@ public class ExceptionHandlingMiddleware
                 problemDetails.Status = (int)HttpStatusCode.InternalServerError;
                 problemDetails.Title = "Internal Server Error";
                 problemDetails.Detail = "An error occurred while processing your request.";
+                problemDetails.Extensions["errorCode"] = "InternalServerError";
                 break;
         }
 
