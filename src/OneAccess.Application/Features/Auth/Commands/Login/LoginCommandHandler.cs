@@ -91,7 +91,8 @@ public class LoginCommandHandler : IRequestHandler<LoginCommand, Result<LoginRes
 
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        var userInfo = new LoginUserInfo(user.Id, user.Username, user.Email, user.FullName, user.IsSystemAdministrator);
+        var isSysAdmin = roleNames.Contains(SystemRoles.SystemAdministrator);
+        var userInfo = new LoginUserInfo(user.Id, user.Username, user.Email, user.FullName, isSysAdmin);
         return Result<LoginResponse>.Success(new LoginResponse(accessToken, refreshTokenString, 15, userInfo));
     }
 }
