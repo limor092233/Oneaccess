@@ -163,20 +163,20 @@ builder.Host.UseSerilog((ctx, cfg) =>
       }
     },
     "WriteTo": [
-      { "Name": "Console" },
-      {
-        "Name": "File",
-        "Args": {
-          "path": "logs/oneaccess-.log",
-          "rollingInterval": "Day",
-          "retainedFileCountLimit": 30
-        }
-      }
+      { "Name": "Console" }
     ],
+    "File": {
+      "Path": "logs/oneaccess-.log",
+      "RollingInterval": "Day",
+      "RetainedFileCountLimit": 30
+    },
     "Enrich": [ "FromLogContext", "WithMachineName", "WithEnvironmentName" ]
   }
 }
 ```
+
+> [!NOTE]
+> `File` is configured under `Serilog:File` rather than inside the `WriteTo` array so that `SerilogConfigurator` can attach the `Filter.ByExcluding(IsSetupCodeEvent)` sub-pipeline. If `File` were in `WriteTo`, `ReadFrom.Configuration` would instantiate an unfiltered file sink directly from the array, leaking first-run setup codes into disk logs (`OneAccess.md` Section 12).
 
 `Jwt.SigningKeysDirectory` is a **path**, not a secret — OneAccess signs with RS256, so `RsaKeyProvider` loads private/public key pairs from that directory at startup, one file pair per `kid`. Multiple keys can be present at once during a rotation window (`OneAccess.md` Section 10, "JWT Signing Key Rotation"); `Jwt.ActiveKeyId` tells `JwtTokenService` which one to sign new tokens with. The directory path itself is not sensitive, but its contents are — the actual PEM files live outside the repository and outside `appsettings.json`, following the User Secrets / environment-variable rule above.
 
