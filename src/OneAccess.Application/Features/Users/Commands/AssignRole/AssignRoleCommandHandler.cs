@@ -47,13 +47,13 @@ public class AssignRoleCommandHandler : IRequestHandler<AssignRoleCommand, Resul
             return Result.NotFound("Role not found.");
         }
 
-        // Guard 5: Only System Administrators can assign system roles (IsSystemRole == true)
-        if (role.IsSystemRole)
+        // Guard 5: Escalation prevention — only System Administrators can assign the System Administrator role
+        if (string.Equals(role.Name, SystemRoles.SystemAdministrator, StringComparison.OrdinalIgnoreCase))
         {
             var isSysAdmin = await _currentUserService.IsSystemAdministratorAsync(cancellationToken);
             if (!isSysAdmin)
             {
-                return Result.Forbidden("Only System Administrators can assign system roles.");
+                return Result.Forbidden("Only System Administrators can assign the System Administrator role.");
             }
         }
 

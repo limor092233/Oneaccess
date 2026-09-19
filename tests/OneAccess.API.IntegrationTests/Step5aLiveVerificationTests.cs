@@ -145,10 +145,10 @@ public class Step5aLiveVerificationTests : IClassFixture<OneAccessApiFactory>
         revokePermResponse.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
         // -------------------------------------------------------------
-        // Scenario 4: Attempt to assign "System Administrator" role to a user as a caller who is NOT a System Administrator -> rejected (403)
+        // Setup Non-SysAdmin Administrator scoped to Division 1
         // -------------------------------------------------------------
-        _output.WriteLine("### Scenario 4: Non-SysAdmin assigns 'System Administrator' role");
         var adminRole = await db.Roles.FirstAsync(r => r.Name == SystemRoles.Administrator);
+        var userRole = await db.Roles.FirstAsync(r => r.Name == SystemRoles.User);
         var userUpdatePerm = await db.Permissions.FirstAsync(p => p.Code == "user.update");
         var userViewPerm = await db.Permissions.FirstAsync(p => p.Code == "user.view");
         var userCreatePerm = await db.Permissions.FirstAsync(p => p.Code == "user.create");
@@ -181,16 +181,6 @@ public class Step5aLiveVerificationTests : IClassFixture<OneAccessApiFactory>
         });
         await db.SaveChangesAsync();
 
-        // Create a target user in Div 1
-        var targetUserRes = await sysAdminClient.PostAsJsonAsync("/api/users", new CreateUserCommand(
-            "targetuser",
-            "target@oneaccess.local",
-            "Password123!",
-            "Target User",
-            div1.Id
-        ));
-        var targetUserObj = await targetUserRes.Content.ReadFromJsonAsync<CreateUserResponse>(_jsonOptions);
-
         // Login as div1admin
         var adminClient = _factory.CreateClient(new WebApplicationFactoryClientOptions
         {
@@ -199,6 +189,19 @@ public class Step5aLiveVerificationTests : IClassFixture<OneAccessApiFactory>
         });
         await adminClient.PostAsJsonAsync("/api/auth/login", new LoginCommand("div1admin", "AdminPass123!"));
 
+        // -------------------------------------------------------------
+        // Scenario 4a: Attempt to assign "System Administrator" role to a user as a caller who is NOT a System Administrator -> rejected (403)
+        // -------------------------------------------------------------
+        _output.WriteLine("### Scenario 4a: Non-SysAdmin attempts to assign 'System Administrator' role -> rejected (403)");
+        var targetUserRes = await adminClient.PostAsJsonAsync("/api/users", new CreateUserCommand(
+            "targetuser",
+            "target@oneaccess.local",
+            "Password123!",
+            "Target User",
+            div1.Id
+        ));
+        var targetUserObj = await targetUserRes.Content.ReadFromJsonAsync<CreateUserResponse>(_jsonOptions);
+
         var assignSysRolePayload = new { roleId = sysAdminRoleId };
         var assignSysRoleJson = JsonSerializer.Serialize(assignSysRolePayload, _jsonOptions);
         _output.WriteLine($"Request (as div1admin): POST /api/users/{targetUserObj!.Id}/roles\n{assignSysRoleJson}");
@@ -206,6 +209,18 @@ public class Step5aLiveVerificationTests : IClassFixture<OneAccessApiFactory>
         var nonSysAdminAssignSysRoleContent = await nonSysAdminAssignSysRoleRes.Content.ReadAsStringAsync();
         _output.WriteLine($"Response: {(int)nonSysAdminAssignSysRoleRes.StatusCode} {nonSysAdminAssignSysRoleRes.StatusCode}\n{nonSysAdminAssignSysRoleContent}\n");
         nonSysAdminAssignSysRoleRes.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+
+        // -------------------------------------------------------------
+        // Scenario 4b: As div1admin, assign "User" role to target user -> succeeds (200)
+        // -------------------------------------------------------------
+        _output.WriteLine("### Scenario 4b: Non-SysAdmin assigns built-in 'User' role to target user -> succeeds (200)");
+        var assignUserRolePayload = new { roleId = userRole.Id };
+        var assignUserRoleJson = JsonSerializer.Serialize(assignUserRolePayload, _jsonOptions);
+        _output.WriteLine($"Request (as div1admin): POST /api/users/{targetUserObj.Id}/roles\n{assignUserRoleJson}");
+        var nonSysAdminAssignUserRoleRes = await adminClient.PostAsJsonAsync($"/api/users/{targetUserObj.Id}/roles", assignUserRolePayload);
+        var nonSysAdminAssignUserRoleContent = await nonSysAdminAssignUserRoleRes.Content.ReadAsStringAsync();
+        _output.WriteLine($"Response: {(int)nonSysAdminAssignUserRoleRes.StatusCode} {nonSysAdminAssignUserRoleRes.StatusCode}\n{nonSysAdminAssignUserRoleContent}\n");
+        nonSysAdminAssignUserRoleRes.StatusCode.Should().Be(HttpStatusCode.OK);
 
         // -------------------------------------------------------------
         // Scenario 5: Create a user with a DivisionId/SectionId mismatch -> rejected (400)

@@ -51,7 +51,7 @@ public class AssignRoleCommandHandlerTests
     }
 
     [Fact]
-    public async Task Handle_WhenNonSysAdminAssignsSystemRole_ShouldReturnForbidden()
+    public async Task Handle_WhenNonSysAdminAssignsSystemAdministratorRole_ShouldReturnForbidden()
     {
         var userId = Guid.NewGuid();
         var roleId = Guid.NewGuid();
@@ -67,6 +67,27 @@ public class AssignRoleCommandHandlerTests
 
         result.Succeeded.Should().BeFalse();
         result.StatusCode.Should().Be(403);
+    }
+
+    [Fact]
+    public async Task Handle_WhenNonSysAdminAssignsStandardUserRole_ShouldSucceed()
+    {
+        var userId = Guid.NewGuid();
+        var roleId = Guid.NewGuid();
+        var user = new User { Id = userId, Username = "testuser" };
+        var role = new Role { Id = roleId, Name = SystemRoles.User, IsSystemRole = true }; // Built-in role with IsSystemRole=true
+
+        _userRepo.GetByIdAsync(userId, Arg.Any<CancellationToken>()).Returns(user);
+        _roleRepo.GetByIdAsync(roleId, Arg.Any<CancellationToken>()).Returns(role);
+        _currentUserService.IsSystemAdministratorAsync(Arg.Any<CancellationToken>()).Returns(false); // Non-SysAdmin caller
+        _readDbContext.UserRoles.Returns(new List<UserRole>().AsQueryable());
+
+        var command = new AssignRoleCommand(userId, roleId);
+        var result = await _handler.Handle(command, CancellationToken.None);
+
+        result.Succeeded.Should().BeTrue();
+        await _userRoleRepo.Received(1).AddAsync(Arg.Any<UserRole>(), Arg.Any<CancellationToken>());
+        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -91,6 +112,6 @@ public class AssignRoleCommandHandlerTests
         await _cacheService.Received(1).RemoveAsync($"roles:{userId}", Arg.Any<CancellationToken>());
         await _cacheService.Received(1).RemoveAsync($"permissions:{userId}", Arg.Any<CancellationToken>());
         await _tokenRevocationService.Received(1).RevokeAsync(userId, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
-        await _unitOfWork.Received(1).SaveChangesAsync(Arg.Any<CancellationToken>());
+        await _unitOfWork.SaveChangesAsync(Arg.Any<CancellationToken>());
     }
 }

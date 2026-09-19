@@ -77,10 +77,10 @@ public class CreateUserCommandHandler : IRequestHandler<CreateUserCommand, Resul
                 .Where(r => request.RoleIds.Contains(r.Id))
                 .ToList();
 
-            // Guard 5: Only System Administrator can assign system roles
-            if (roles.Any(r => r.IsSystemRole) && !isSysAdmin)
+            // Guard 5: Escalation prevention — only System Administrator can assign the System Administrator role
+            if (roles.Any(r => string.Equals(r.Name, SystemRoles.SystemAdministrator, StringComparison.OrdinalIgnoreCase)) && !isSysAdmin)
             {
-                return Result<CreateUserResponse>.Forbidden("Only System Administrators can assign system roles.");
+                return Result<CreateUserResponse>.Forbidden("Only System Administrators can assign the System Administrator role.");
             }
 
             foreach (var role in roles)
