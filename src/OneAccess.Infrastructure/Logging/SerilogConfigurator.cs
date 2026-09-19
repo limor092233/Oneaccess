@@ -35,9 +35,16 @@ public static class SerilogConfigurator
         var logFilePath = configuration["Serilog:File:Path"] ?? configuration["Logging:FilePath"];
         if (!string.IsNullOrWhiteSpace(logFilePath))
         {
+            var rollingIntervalStr = configuration["Serilog:File:RollingInterval"];
+            var rollingInterval = Enum.TryParse<RollingInterval>(rollingIntervalStr, true, out var parsedInterval)
+                ? parsedInterval
+                : RollingInterval.Day;
+
+            var retainedFiles = configuration.GetValue<int?>("Serilog:File:RetainedFileCountLimit") ?? 30;
+
             loggerConfig.WriteTo.Logger(lc => lc
                 .Filter.ByExcluding(IsSetupCodeEvent)
-                .WriteTo.File(logFilePath, rollingInterval: RollingInterval.Day));
+                .WriteTo.File(logFilePath, rollingInterval: rollingInterval, retainedFileCountLimit: retainedFiles));
         }
     }
 

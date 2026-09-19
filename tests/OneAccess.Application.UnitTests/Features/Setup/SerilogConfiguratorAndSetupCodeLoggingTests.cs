@@ -1,5 +1,6 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -65,21 +66,36 @@ public class SerilogConfiguratorAndSetupCodeLoggingTests
     }
 
     [Fact]
-    public async Task SmokeTest_SetupCodeLoggedToConsole_ExcludedFromDiskLogFile()
+    public async Task SmokeTest_UsingRealAppSettings_SetupCodeLoggedToConsole_ExcludedFromDiskLogFile()
     {
-        // Arrange
-        var tempLogPath = Path.Combine(Path.GetTempPath(), $"oneaccess_test_{Guid.NewGuid():N}.log");
-        var consoleLogs = new List<LogEvent>();
+        // Arrange - Load REAL appsettings.json from src/OneAccess.API
+        var appsettingsPath = GetAppsettingsPath();
+        File.Exists(appsettingsPath).Should().BeTrue("real src/OneAccess.API/appsettings.json must exist");
+
+        var testLogDir = Path.Combine(Path.GetTempPath(), $"oneaccess_smoke_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(testLogDir);
+        var testLogFilePattern = Path.Combine(testLogDir, "oneaccess-.log");
 
         try
         {
-            var serilogLogger = new LoggerConfiguration()
-                .Enrich.FromLogContext()
-                // Console sink: unfiltered (receives setup code)
-                .WriteTo.Sink(new DelegatingSink(e => consoleLogs.Add(e)))
-                // Non-console / File sink on disk: filtered via SerilogConfigurator
-                .WriteToNonConsole(sink => sink.WriteTo.File(tempLogPath))
-                .CreateLogger();
+            // Build configuration using real appsettings.json, overriding the log path to a clean temp directory
+            var configuration = new ConfigurationBuilder()
+                .AddJsonFile(appsettingsPath, optional: false)
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["Serilog:File:Path"] = testLogFilePattern,
+                    ["Setup:ConsoleOutputEnabled"] = "true" // Enable console output for first-run
+                })
+                .Build();
+
+            var consoleLogs = new List<LogEvent>();
+
+            // Configure Serilog using SerilogConfigurator with the REAL app configuration
+            var loggerConfig = new LoggerConfiguration()
+                .WriteTo.Sink(new DelegatingSink(e => consoleLogs.Add(e)));
+
+            SerilogConfigurator.Configure(loggerConfig, configuration);
+            var serilogLogger = loggerConfig.CreateLogger();
 
             var loggerFactory = new LoggerFactory();
             loggerFactory.AddSerilog(serilogLogger);
@@ -102,35 +118,53 @@ public class SerilogConfiguratorAndSetupCodeLoggingTests
 
             var service = new SetupCodeService(db, uow, setupOptions, dateTimeProvider, logger);
 
-            // Emit a normal startup log
-            logger.LogInformation("OneAccess backend startup initialized.");
+            // Act 1: Standard application log
+            logger.LogInformation("OneAccess backend startup initialized from real appsettings.json.");
 
-            // Act: Generate setup code (which emits setup code to logger with IsSetupCode)
+            // Act 2: Emit first-run setup code
             var setupCode = await service.GenerateAndStoreCodeAsync();
 
-            // Flush Serilog logger to disk
+            // Flush & close Serilog file sink
             serilogLogger.Dispose();
 
-            // Assert 1: Console sink contains both the normal log and the setup code
+            // Assert 1: Console sink received both the startup log and the raw setup code
             consoleLogs.Should().HaveCount(2);
             consoleLogs.Any(e => e.RenderMessage().Contains(setupCode)).Should().BeTrue();
             consoleLogs.Any(e => e.RenderMessage().Contains("[SETUP] First-Run System Administrator Setup")).Should().BeTrue();
 
-            // Assert 2: File on disk contains the normal startup log, but NEVER contains the setup code
-            File.Exists(tempLogPath).Should().BeTrue();
-            var fileText = await File.ReadAllTextAsync(tempLogPath);
-            fileText.Should().Contain("OneAccess backend startup initialized.");
-            fileText.Should().NotContain(setupCode);
-            fileText.Should().NotContain("[SETUP] First-Run System Administrator Setup");
-            fileText.Should().NotContain(SerilogConfigurator.SetupCodePropertyName);
+            // Assert 2: File sink on disk was generated via SerilogConfigurator and real config
+            var logFiles = Directory.GetFiles(testLogDir, "*.log");
+            logFiles.Should().NotBeEmpty("SerilogConfigurator should have created the log file on disk");
+
+            var fileContent = await File.ReadAllTextAsync(logFiles.First());
+            fileContent.Should().Contain("OneAccess backend startup initialized from real appsettings.json.");
+            fileContent.Should().NotContain(setupCode, "Setup code must NEVER appear in disk logs (OneAccess.md Section 12)");
+            fileContent.Should().NotContain("[SETUP] First-Run System Administrator Setup");
+            fileContent.Should().NotContain(SerilogConfigurator.SetupCodePropertyName);
         }
         finally
         {
-            if (File.Exists(tempLogPath))
+            if (Directory.Exists(testLogDir))
             {
-                try { File.Delete(tempLogPath); } catch { }
+                try { Directory.Delete(testLogDir, true); } catch { }
             }
         }
+    }
+
+    private static string GetAppsettingsPath()
+    {
+        var currentDir = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+        while (currentDir != null && !File.Exists(Path.Combine(currentDir.FullName, "OneAccess.sln")))
+        {
+            currentDir = currentDir.Parent;
+        }
+
+        if (currentDir == null)
+        {
+            throw new InvalidOperationException("Could not locate solution root containing OneAccess.sln");
+        }
+
+        return Path.Combine(currentDir.FullName, "src", "OneAccess.API", "appsettings.json");
     }
 
     private class DelegatingSink : Serilog.Core.ILogEventSink
