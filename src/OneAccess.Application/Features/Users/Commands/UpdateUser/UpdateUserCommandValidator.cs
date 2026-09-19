@@ -1,4 +1,5 @@
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
 using OneAccess.Application.Common.Interfaces;
 
 namespace OneAccess.Application.Features.Users.Commands.UpdateUser;
@@ -23,20 +24,20 @@ public class UpdateUserCommandValidator : AbstractValidator<UpdateUserCommand>
             .MaximumLength(100).WithMessage("Full name cannot exceed 100 characters.");
 
         // Section without Division is invalid
-        RuleFor(x => x)
-            .Must(x => !x.SectionId.HasValue || x.DivisionId.HasValue)
+        RuleFor(x => x.SectionId)
+            .Must((cmd, sectionId) => !sectionId.HasValue || cmd.DivisionId.HasValue)
             .WithMessage("DivisionId must be specified when SectionId is provided.");
 
         // Section must belong to Division
-        RuleFor(x => x)
-            .Must((cmd) =>
+        RuleFor(x => x.SectionId)
+            .MustAsync(async (cmd, sectionId, ct) =>
             {
-                if (!cmd.SectionId.HasValue || !cmd.DivisionId.HasValue)
+                if (!sectionId.HasValue || !cmd.DivisionId.HasValue)
                 {
                     return true;
                 }
 
-                var section = db.Sections.FirstOrDefault(s => s.Id == cmd.SectionId.Value);
+                var section = await db.Sections.FirstOrDefaultAsync(s => s.Id == sectionId.Value, ct);
                 return section != null && section.DivisionId == cmd.DivisionId.Value;
             })
             .WithMessage("Section does not belong to the specified Division.");

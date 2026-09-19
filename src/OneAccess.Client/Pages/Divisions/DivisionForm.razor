@@ -1,0 +1,175 @@
+@page "/divisions/new"
+@page "/divisions/{Id:guid}/edit"
+@attribute [Authorize]
+@inject IDivisionApi DivisionApi
+@inject NavigationManager Navigation
+@inject ToastService ToastService
+
+<PageTitle>OneAccess - @(IsEditMode ? "Edit Division" : "Create Division")</PageTitle>
+
+<div class="form-page-container">
+    <div class="page-header mb-4">
+        <h2>@(IsEditMode ? $"Edit Division: {nameReadOnly}" : "Create New Division")</h2>
+        <p class="text-secondary">@(IsEditMode ? "Update division details." : "Add a new organizational division.")</p>
+    </div>
+
+    @if (!string.IsNullOrEmpty(generalError))
+    {
+        <div class="alert alert-danger mb-4" id="division-form-error-alert" role="alert">
+            <strong>Error:</strong> <span id="division-form-error-text">@generalError</span>
+        </div>
+    }
+
+    <div class="card p-4">
+        <EditForm Model="@formModel" OnSubmit="@HandleSubmit">
+            <div class="row g-3">
+                <div class="col-md-12">
+                    <label for="division-name-input" class="form-label">Division Name</label>
+                    <input type="text" class="form-control @(GetFieldError("Name") != null ? "is-invalid" : "")"
+                           id="division-name-input"
+                           @bind="formModel.Name"
+                           @bind:event="oninput"
+                           placeholder="e.g. Engineering" />
+                    @if (GetFieldError("Name") != null)
+                    {
+                        <div class="invalid-feedback d-block field-error" id="error-Name">@GetFieldError("Name")</div>
+                    }
+                </div>
+
+                <div class="col-md-12">
+                    <label for="division-description-input" class="form-label">Description (Optional)</label>
+                    <textarea class="form-control @(GetFieldError("Description") != null ? "is-invalid" : "")"
+                              id="division-description-input"
+                              rows="3"
+                              @bind="formModel.Description"
+                              @bind:event="oninput"
+                              placeholder="Brief description of the division's purpose..."></textarea>
+                    @if (GetFieldError("Description") != null)
+                    {
+                        <div class="invalid-feedback d-block field-error" id="error-Description">@GetFieldError("Description")</div>
+                    }
+                </div>
+            </div>
+
+            <div class="form-actions d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                <a href="/divisions" class="btn btn-outline" id="division-cancel-btn">Cancel</a>
+                <button type="button" class="btn btn-primary" id="division-save-btn" disabled="@isSaving" @onclick="HandleSubmit">
+                    @(isSaving ? "Saving..." : (IsEditMode ? "Save Changes" : "Create Division"))
+                </button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private bool IsEditMode => Id.HasValue && Id != Guid.Empty;
+
+    private class DivisionFormViewModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+    }
+
+    private DivisionFormViewModel formModel = new();
+    private string nameReadOnly = string.Empty;
+    private Dictionary<string, string[]> fieldErrors = new(StringComparer.OrdinalIgnoreCase);
+    private string? generalError;
+    private bool isSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (IsEditMode)
+        {
+            await LoadDivision(Id!.Value);
+        }
+    }
+
+    private async Task LoadDivision(Guid divisionId)
+    {
+        try
+        {
+            var divisions = await DivisionApi.GetDivisionsAsync();
+            var div = divisions?.FirstOrDefault(d => d.Id == divisionId);
+            if (div != null)
+            {
+                nameReadOnly = div.Name;
+                formModel = new DivisionFormViewModel
+                {
+                    Name = div.Name,
+                    Description = div.Description
+                };
+            }
+            else
+            {
+                // If the division is not found or not accessible to the caller
+                generalError = "Division not found or you do not have permission to view it.";
+            }
+        }
+        catch (ApiException ex)
+        {
+            generalError = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            generalError = $"Failed to load division: {ex.Message}";
+        }
+    }
+
+    private string? GetFieldError(string fieldName)
+    {
+        if (fieldErrors.TryGetValue(fieldName, out var errors) && errors.Length > 0)
+        {
+            return string.Join("; ", errors);
+        }
+
+        return null;
+    }
+
+    private async Task HandleSubmit()
+    {
+        fieldErrors.Clear();
+        generalError = null;
+        isSaving = true;
+
+        try
+        {
+            if (IsEditMode)
+            {
+                var req = new UpdateDivisionRequest(formModel.Name, formModel.Description);
+                await DivisionApi.UpdateDivisionAsync(Id!.Value, req);
+                ToastService.ShowSuccess($"Division '{formModel.Name}' updated successfully.");
+                Navigation.NavigateTo("/divisions");
+            }
+            else
+            {
+                var req = new CreateDivisionRequest(formModel.Name, formModel.Description);
+                var created = await DivisionApi.CreateDivisionAsync(req);
+                ToastService.ShowSuccess($"Division '{formModel.Name}' created successfully.");
+                Navigation.NavigateTo("/divisions");
+            }
+        }
+        catch (ApiException ex)
+        {
+            if (ex.Problem?.Errors != null && ex.Problem.Errors.Count > 0)
+            {
+                fieldErrors = new Dictionary<string, string[]>(ex.Problem.Errors, StringComparer.OrdinalIgnoreCase);
+                generalError = ex.Problem.Detail ?? "Please correct the validation errors below.";
+            }
+            else
+            {
+                generalError = ex.Problem?.Detail ?? ex.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            generalError = $"An unexpected error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}

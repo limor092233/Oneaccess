@@ -1,4 +1,5 @@
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
 using OneAccess.Application.Common.Interfaces;
 
 namespace OneAccess.Application.Features.Divisions.Commands.CreateDivision;
@@ -10,10 +11,10 @@ public class CreateDivisionCommandValidator : AbstractValidator<CreateDivisionCo
         RuleFor(x => x.Name)
             .NotEmpty().WithMessage("Division name is required.")
             .MaximumLength(100).WithMessage("Division name must not exceed 100 characters.")
-            .Must((name) =>
+            .MustAsync(async (name, ct) =>
             {
                 var lower = name.Trim().ToLower();
-                return !readDbContext.Divisions.Any(d => d.Name.ToLower() == lower);
+                return !await readDbContext.Divisions.AnyAsync(d => d.Name.ToLower() == lower, ct);
             })
             .WithMessage("A division with this name already exists.");
 

@@ -1,0 +1,237 @@
+@page "/divisions/{Id:guid}/users"
+@attribute [Authorize]
+@inject IDivisionApi DivisionApi
+@inject IUserApi UserApi
+@inject NavigationManager Navigation
+@inject ToastService ToastService
+
+<PageTitle>OneAccess - Division Administrators</PageTitle>
+
+<div class="division-users-container">
+    <div class="page-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>Division Administrators: @divisionName</h2>
+            <p class="text-secondary">Manage which Administrators are assigned to oversee this division.</p>
+        </div>
+        <a href="/divisions" class="btn btn-outline" id="back-to-divisions-btn">
+            ← Back to Divisions
+        </a>
+    </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger mb-4" id="division-users-error-alert" role="alert">
+            <strong>Error:</strong> @errorMessage
+        </div>
+    }
+
+    <PermissionView Requires="userdivision.assign">
+        <div class="card mb-4 p-4">
+            <h5 class="card-title mb-3">Assign Administrator</h5>
+            <p class="text-secondary small mb-3">
+                Select a user to grant Administrator privileges scoped to this division.
+            </p>
+            <div class="row g-3 align-items-end">
+                <div class="col-md-8">
+                    <label for="assign-user-select" class="form-label">User</label>
+                    <select class="form-control form-select" id="assign-user-select" @bind="selectedUserIdString">
+                        <option value="">-- Select a User --</option>
+                        @if (candidateUsers != null)
+                        {
+                            @foreach (var u in candidateUsers)
+                            {
+                                <option value="@u.Id">@u.FullName (@u.Username - @u.Email)</option>
+                            }
+                        }
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <button class="btn btn-primary w-100" id="assign-admin-btn"
+                            disabled="@(selectedUserIdToAssign == null || isAssigning)"
+                            @onclick="AssignAdministrator">
+                        @(isAssigning ? "Assigning..." : "+ Assign Administrator")
+                    </button>
+                </div>
+            </div>
+        </div>
+    </PermissionView>
+
+    <div class="card p-0">
+        <div class="card-header p-3 bg-transparent border-bottom">
+            <h5 class="mb-0">Assigned Administrators (@(administrators?.Count ?? 0))</h5>
+        </div>
+        <DataTable TItem="DivisionAdministratorDto"
+                   Items="@administrators"
+                   IsLoading="@isLoading"
+                   ErrorMessage="@errorMessage"
+                   OnRetry="@LoadData">
+            <HeaderContent>
+                <th>Username</th>
+                <th>Full Name</th>
+                <th>Email</th>
+                <th>Assigned Date</th>
+                <th class="text-end">Actions</th>
+            </HeaderContent>
+            <RowTemplate Context="admin">
+                <td>
+                    <strong class="admin-row-username" id="admin-username-@admin.Username">@admin.Username</strong>
+                </td>
+                <td>@admin.FullName</td>
+                <td>@admin.Email</td>
+                <td>@admin.GrantedAt.ToLocalTime().ToString("g")</td>
+                <td class="text-end">
+                    <PermissionView Requires="userdivision.revoke">
+                        <button class="btn btn-outline-danger btn-sm admin-revoke-btn"
+                                id="revoke-btn-@admin.Username"
+                                title="Revoke Administrator"
+                                @onclick="() => PromptRevoke(admin)">
+                            Revoke
+                        </button>
+                    </PermissionView>
+                </td>
+            </RowTemplate>
+        </DataTable>
+    </div>
+</div>
+
+<ConfirmDialog IsVisible="@isConfirmRevokeVisible"
+               Title="Revoke Administrator Assignment"
+               Message="@($"Are you sure you want to revoke Administrator '{adminToRevoke?.Username}' from division '{divisionName}'?")"
+               ConfirmText="Revoke Assignment"
+               OnConfirm="@ConfirmRevoke"
+               OnCancel="@CancelRevoke" />
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private string divisionName = string.Empty;
+    private IReadOnlyList<DivisionAdministratorDto>? administrators;
+    private IReadOnlyList<UserDto>? candidateUsers;
+    private Guid? selectedUserIdToAssign;
+    private bool isLoading = true;
+    private bool isAssigning;
+    private string? errorMessage;
+
+    private bool isConfirmRevokeVisible;
+    private DivisionAdministratorDto? adminToRevoke;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var divisions = await DivisionApi.GetDivisionsAsync();
+            var div = divisions?.FirstOrDefault(d => d.Id == Id);
+            if (div != null)
+            {
+                divisionName = div.Name;
+            }
+
+            administrators = await DivisionApi.GetDivisionAdministratorsAsync(Id);
+
+            // Load candidate users to assign
+            var userResult = await UserApi.GetUsersAsync(pageNumber: 1, pageSize: 100);
+            if (userResult?.Items != null)
+            {
+                var assignedIds = administrators?.Select(a => a.UserId).ToHashSet() ?? new HashSet<Guid>();
+                candidateUsers = userResult.Items.Where(u => !assignedIds.Contains(u.Id)).ToList();
+            }
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Problem?.Detail ?? ex.Message;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load division administrators: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private string selectedUserIdString
+    {
+        get => selectedUserIdToAssign?.ToString() ?? string.Empty;
+        set
+        {
+            if (Guid.TryParse(value, out var guid))
+            {
+                selectedUserIdToAssign = guid;
+            }
+            else
+            {
+                selectedUserIdToAssign = null;
+            }
+        }
+    }
+
+    private async Task AssignAdministrator()
+    {
+        if (selectedUserIdToAssign == null) return;
+
+        isAssigning = true;
+        try
+        {
+            await DivisionApi.AssignDivisionAdministratorAsync(Id, selectedUserIdToAssign.Value);
+            ToastService.ShowSuccess("Administrator assigned successfully.");
+            selectedUserIdToAssign = null;
+            await LoadData();
+        }
+        catch (ApiException ex)
+        {
+            ToastService.ShowError($"Failed to assign administrator: {ex.Problem?.Detail ?? ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"An unexpected error occurred: {ex.Message}");
+        }
+        finally
+        {
+            isAssigning = false;
+        }
+    }
+
+    private void PromptRevoke(DivisionAdministratorDto admin)
+    {
+        adminToRevoke = admin;
+        isConfirmRevokeVisible = true;
+    }
+
+    private void CancelRevoke()
+    {
+        adminToRevoke = null;
+        isConfirmRevokeVisible = false;
+    }
+
+    private async Task ConfirmRevoke()
+    {
+        if (adminToRevoke == null) return;
+
+        try
+        {
+            await DivisionApi.RevokeDivisionAdministratorAsync(Id, adminToRevoke.UserId);
+            ToastService.ShowSuccess($"Administrator '{adminToRevoke.Username}' revoked successfully.");
+            isConfirmRevokeVisible = false;
+            adminToRevoke = null;
+            await LoadData();
+        }
+        catch (ApiException ex)
+        {
+            ToastService.ShowError($"Failed to revoke administrator: {ex.Problem?.Detail ?? ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"An unexpected error occurred: {ex.Message}");
+        }
+    }
+}

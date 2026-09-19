@@ -101,7 +101,7 @@ src/OneAccess.Client/
 │   │   ├── IUserApi.cs / UserApi.cs
 │   │   ├── IRoleApi.cs / RoleApi.cs
 │   │   ├── ISubSystemApi.cs / SubSystemApi.cs
-│   │   ├── IDivisionApi.cs / DivisionApi.cs
+│   │   ├── IDivisionApi.cs / DivisionApi.cs  ← initialized in 7a for lookups (GetDivisions, GetSectionsByDivision); 7b extends with CRUD & user assignments
 │   │   ├── ISectionApi.cs / SectionApi.cs
 │   │   ├── IAuditApi.cs / AuditApi.cs
 │   │   ├── IPermissionApi.cs / PermissionApi.cs

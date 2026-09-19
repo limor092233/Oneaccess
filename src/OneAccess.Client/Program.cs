@@ -33,5 +33,6 @@ builder.Services.AddScoped<IUserApi, UserApi>();
 builder.Services.AddScoped<IRoleApi, RoleApi>();
 builder.Services.AddScoped<IPermissionApi, PermissionApi>();
 builder.Services.AddScoped<IDivisionApi, DivisionApi>();
+builder.Services.AddScoped<ISectionApi, SectionApi>();
 
 await builder.Build().RunAsync();

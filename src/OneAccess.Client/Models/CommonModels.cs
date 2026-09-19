@@ -36,3 +36,20 @@ public class PagedResult<T>
     public bool HasPreviousPage => PageNumber > 1;
     public bool HasNextPage => PageNumber < TotalPages;
 }
+
+public record CreateDivisionRequest(string Name, string Description);
+
+public record UpdateDivisionRequest(string Name, string Description);
+
+public record CreateDivisionResponse(Guid Id, string Name, string Description);
+
+public record DivisionAdministratorDto(Guid UserId, string Username, string FullName, string Email, DateTime GrantedAt);
+
+public record AssignUserDivisionRequest(Guid UserId);
+
+public record CreateSectionRequest(Guid DivisionId, string Name, string Description);
+
+public record UpdateSectionRequest(string Name, string Description);
+
+public record CreateSectionResponse(Guid Id, Guid DivisionId, string Name, string Description);
+

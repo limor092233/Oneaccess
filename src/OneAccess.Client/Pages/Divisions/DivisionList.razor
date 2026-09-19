@@ -1,0 +1,143 @@
+@page "/divisions"
+@attribute [Authorize]
+@inject IDivisionApi DivisionApi
+@inject NavigationManager Navigation
+@inject ToastService ToastService
+
+<PageTitle>OneAccess - Divisions</PageTitle>
+
+<div class="divisions-page-container">
+    <div class="page-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>Division Management</h2>
+            <p class="text-secondary">View and manage organizational divisions and assigned administrators.</p>
+        </div>
+        <PermissionView Requires="division.create">
+            <a href="/divisions/new" class="btn btn-primary" id="new-division-btn">
+                <span>+ Create Division</span>
+            </a>
+        </PermissionView>
+    </div>
+
+    <div class="card p-0">
+        <DataTable TItem="DivisionDto"
+                   Items="@divisions"
+                   IsLoading="@isLoading"
+                   ErrorMessage="@errorMessage"
+                   OnRetry="@LoadDivisions">
+            <HeaderContent>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Sections</th>
+                <th>Users</th>
+                <th>Created</th>
+                <th class="text-end">Actions</th>
+            </HeaderContent>
+            <RowTemplate Context="division">
+                <td>
+                    <strong class="division-row-name" id="division-name-@division.Name">@division.Name</strong>
+                </td>
+                <td>@division.Description</td>
+                <td><span class="badge bg-secondary">@division.TotalSections</span></td>
+                <td><span class="badge bg-secondary">@division.TotalUsers</span></td>
+                <td>@division.CreatedAt.ToLocalTime().ToString("g")</td>
+                <td class="text-end">
+                    <div class="btn-group btn-group-sm">
+                        <a href="/divisions/@division.Id/users" class="btn btn-outline btn-sm me-1 division-users-btn" id="users-btn-@division.Name" title="Manage Administrators">
+                            Administrators
+                        </a>
+                        <PermissionView Requires="division.update">
+                            <a href="/divisions/@division.Id/edit" class="btn btn-outline btn-sm me-1 division-edit-btn" id="edit-btn-@division.Name" title="Edit Division">
+                                Edit
+                            </a>
+                        </PermissionView>
+                        <PermissionView Requires="division.delete">
+                            <button class="btn btn-outline-danger btn-sm division-delete-btn" id="delete-btn-@division.Name" title="Delete Division"
+                                    @onclick="() => PromptDelete(division)">
+                                Delete
+                            </button>
+                        </PermissionView>
+                    </div>
+                </td>
+            </RowTemplate>
+        </DataTable>
+    </div>
+</div>
+
+<ConfirmDialog IsVisible="@isConfirmDeleteVisible"
+               Title="Delete Division"
+               Message="@($"Are you sure you want to delete division '{divisionToDelete?.Name}'? All nested sections and user associations must be removed first.")"
+               ConfirmText="Delete Division"
+               OnConfirm="@ConfirmDelete"
+               OnCancel="@CancelDelete" />
+
+@code {
+    private IReadOnlyList<DivisionDto>? divisions;
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    private bool isConfirmDeleteVisible;
+    private DivisionDto? divisionToDelete;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDivisions();
+    }
+
+    private async Task LoadDivisions()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            divisions = await DivisionApi.GetDivisionsAsync();
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load divisions: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void PromptDelete(DivisionDto division)
+    {
+        divisionToDelete = division;
+        isConfirmDeleteVisible = true;
+    }
+
+    private void CancelDelete()
+    {
+        divisionToDelete = null;
+        isConfirmDeleteVisible = false;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (divisionToDelete == null) return;
+
+        try
+        {
+            await DivisionApi.DeleteDivisionAsync(divisionToDelete.Id);
+            ToastService.ShowSuccess($"Division '{divisionToDelete.Name}' was successfully deleted.");
+            isConfirmDeleteVisible = false;
+            divisionToDelete = null;
+            await LoadDivisions();
+        }
+        catch (ApiException ex)
+        {
+            ToastService.ShowError($"Failed to delete division: {ex.Problem?.Detail ?? ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"An unexpected error occurred: {ex.Message}");
+        }
+    }
+}

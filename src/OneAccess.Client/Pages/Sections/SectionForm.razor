@@ -1,0 +1,243 @@
+@page "/sections/new"
+@page "/sections/{Id:guid}/edit"
+@attribute [Authorize]
+@inject ISectionApi SectionApi
+@inject IDivisionApi DivisionApi
+@inject NavigationManager Navigation
+@inject ToastService ToastService
+
+<PageTitle>OneAccess - @(IsEditMode ? "Edit Section" : "Create Section")</PageTitle>
+
+<div class="form-page-container">
+    <div class="page-header mb-4">
+        <h2>@(IsEditMode ? $"Edit Section: {nameReadOnly}" : "Create New Section")</h2>
+        <p class="text-secondary">@(IsEditMode ? "Update section details." : "Add a new section under a division.")</p>
+    </div>
+
+    @if (!string.IsNullOrEmpty(generalError))
+    {
+        <div class="alert alert-danger mb-4" id="section-form-error-alert" role="alert">
+            <strong>Error:</strong> <span id="section-form-error-text">@generalError</span>
+        </div>
+    }
+
+    <div class="card p-4">
+        <EditForm Model="@formModel" OnSubmit="@HandleSubmit">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="section-division-select" class="form-label">Division</label>
+                    @if (divisions != null && divisions.Count == 1)
+                    {
+                        <input type="text" class="form-control" id="section-division-readonly"
+                               value="@divisions[0].Name" disabled />
+                    }
+                    else
+                    {
+                        <select class="form-control form-select @(GetFieldError("DivisionId") != null ? "is-invalid" : "")"
+                                id="section-division-select"
+                                disabled="@IsEditMode"
+                                @bind="formModel.DivisionId">
+                            <option value="">-- Select Division --</option>
+                            @if (divisions != null)
+                            {
+                                @foreach (var d in divisions)
+                                {
+                                    <option value="@d.Id">@d.Name</option>
+                                }
+                            }
+                        </select>
+                    }
+                    @if (GetFieldError("DivisionId") != null)
+                    {
+                        <div class="invalid-feedback d-block field-error" id="error-DivisionId">@GetFieldError("DivisionId")</div>
+                    }
+                </div>
+
+                <div class="col-md-6">
+                    <label for="section-name-input" class="form-label">Section Name</label>
+                    <input type="text" class="form-control @(GetFieldError("Name") != null ? "is-invalid" : "")"
+                           id="section-name-input"
+                           @bind="formModel.Name"
+                           @bind:event="oninput"
+                           placeholder="e.g. Backend Team" />
+                    @if (GetFieldError("Name") != null)
+                    {
+                        <div class="invalid-feedback d-block field-error" id="error-Name">@GetFieldError("Name")</div>
+                    }
+                </div>
+
+                <div class="col-md-12">
+                    <label for="section-description-input" class="form-label">Description (Optional)</label>
+                    <textarea class="form-control @(GetFieldError("Description") != null ? "is-invalid" : "")"
+                              id="section-description-input"
+                              rows="3"
+                              @bind="formModel.Description"
+                              @bind:event="oninput"
+                              placeholder="Brief description of the section's purpose..."></textarea>
+                    @if (GetFieldError("Description") != null)
+                    {
+                        <div class="invalid-feedback d-block field-error" id="error-Description">@GetFieldError("Description")</div>
+                    }
+                </div>
+            </div>
+
+            <div class="form-actions d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                <a href="/sections" class="btn btn-outline" id="section-cancel-btn">Cancel</a>
+                <button type="button" class="btn btn-primary" id="section-save-btn" disabled="@isSaving" @onclick="HandleSubmit">
+                    @(isSaving ? "Saving..." : (IsEditMode ? "Save Changes" : "Create Section"))
+                </button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    [SupplyParameterFromQuery]
+    public Guid? DivisionId { get; set; }
+
+    private bool IsEditMode => Id.HasValue && Id != Guid.Empty;
+
+    private class SectionFormViewModel
+    {
+        public Guid? DivisionId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+    }
+
+    private SectionFormViewModel formModel = new();
+    private string nameReadOnly = string.Empty;
+    private IReadOnlyList<DivisionDto>? divisions;
+    private Dictionary<string, string[]> fieldErrors = new(StringComparer.OrdinalIgnoreCase);
+    private string? generalError;
+    private bool isSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDivisions();
+
+        if (IsEditMode)
+        {
+            await LoadSection(Id!.Value);
+        }
+        else if (DivisionId.HasValue)
+        {
+            formModel.DivisionId = DivisionId.Value;
+        }
+    }
+
+    private async Task LoadDivisions()
+    {
+        try
+        {
+            divisions = await DivisionApi.GetDivisionsAsync();
+            if (divisions != null && divisions.Count == 1)
+            {
+                formModel.DivisionId = divisions[0].Id;
+            }
+        }
+        catch
+        {
+            divisions = Array.Empty<DivisionDto>();
+        }
+    }
+
+    private async Task LoadSection(Guid sectionId)
+    {
+        try
+        {
+            if (divisions == null) return;
+
+            foreach (var div in divisions)
+            {
+                var secs = await SectionApi.GetSectionsByDivisionAsync(div.Id);
+                var sec = secs?.FirstOrDefault(s => s.Id == sectionId);
+                if (sec != null)
+                {
+                    nameReadOnly = sec.Name;
+                    formModel = new SectionFormViewModel
+                    {
+                        DivisionId = sec.DivisionId,
+                        Name = sec.Name,
+                        Description = sec.Description
+                    };
+                    return;
+                }
+            }
+
+            generalError = "Section not found or you do not have permission to view it.";
+        }
+        catch (ApiException ex)
+        {
+            generalError = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            generalError = $"Failed to load section: {ex.Message}";
+        }
+    }
+
+    private string? GetFieldError(string fieldName)
+    {
+        if (fieldErrors.TryGetValue(fieldName, out var errors) && errors.Length > 0)
+        {
+            return string.Join("; ", errors);
+        }
+
+        return null;
+    }
+
+    private async Task HandleSubmit()
+    {
+        fieldErrors.Clear();
+        generalError = null;
+        isSaving = true;
+
+        if (!formModel.DivisionId.HasValue)
+        {
+            fieldErrors["DivisionId"] = new[] { "Division is required." };
+            isSaving = false;
+            return;
+        }
+
+        try
+        {
+            if (IsEditMode)
+            {
+                var req = new UpdateSectionRequest(formModel.Name, formModel.Description);
+                await SectionApi.UpdateSectionAsync(Id!.Value, req);
+                ToastService.ShowSuccess($"Section '{formModel.Name}' updated successfully.");
+                Navigation.NavigateTo("/sections");
+            }
+            else
+            {
+                var req = new CreateSectionRequest(formModel.DivisionId.Value, formModel.Name, formModel.Description);
+                var created = await SectionApi.CreateSectionAsync(req);
+                ToastService.ShowSuccess($"Section '{formModel.Name}' created successfully.");
+                Navigation.NavigateTo("/sections");
+            }
+        }
+        catch (ApiException ex)
+        {
+            if (ex.Problem?.Errors != null && ex.Problem.Errors.Count > 0)
+            {
+                fieldErrors = new Dictionary<string, string[]>(ex.Problem.Errors, StringComparer.OrdinalIgnoreCase);
+                generalError = ex.Problem.Detail ?? "Please correct the validation errors below.";
+            }
+            else
+            {
+                generalError = ex.Problem?.Detail ?? ex.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            generalError = $"An unexpected error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}

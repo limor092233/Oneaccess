@@ -251,19 +251,6 @@
             return string.Join("; ", errors);
         }
 
-        // Check for general division/section cross-validation error
-        if (fieldName.Equals("SectionId", StringComparison.OrdinalIgnoreCase) || fieldName.Equals("DivisionId", StringComparison.OrdinalIgnoreCase))
-        {
-            foreach (var key in new[] { string.Empty, "CreateUserCommand", "UpdateUserCommand", "User", "DivisionId", "SectionId" })
-            {
-                if (fieldErrors.TryGetValue(key, out var rootErrors) && rootErrors.Length > 0)
-                {
-                    var matched = rootErrors.FirstOrDefault(r => r.Contains("Division", StringComparison.OrdinalIgnoreCase) || r.Contains("Section", StringComparison.OrdinalIgnoreCase));
-                    if (matched != null) return matched;
-                }
-            }
-        }
-
         return null;
     }
 

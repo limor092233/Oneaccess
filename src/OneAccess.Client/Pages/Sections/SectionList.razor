@@ -1,0 +1,229 @@
+@page "/sections"
+@attribute [Authorize]
+@inject ISectionApi SectionApi
+@inject IDivisionApi DivisionApi
+@inject NavigationManager Navigation
+@inject ToastService ToastService
+
+<PageTitle>OneAccess - Sections</PageTitle>
+
+<div class="sections-page-container">
+    <div class="page-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>Section Management</h2>
+            <p class="text-secondary">View and manage organizational sections under each division.</p>
+        </div>
+        <PermissionView Requires="section.create">
+            <a href="@(selectedDivisionId.HasValue ? $"/sections/new?divisionId={selectedDivisionId.Value}" : "/sections/new")"
+               class="btn btn-primary"
+               id="new-section-btn">
+                <span>+ Create Section</span>
+            </a>
+        </PermissionView>
+    </div>
+
+    <div class="card mb-4 p-3">
+        <div class="row g-3 align-items-center">
+            <div class="col-md-6">
+                <label for="division-filter-select" class="form-label mb-1 fw-bold">Division</label>
+                <select class="form-control form-select"
+                        id="division-filter-select"
+                        value="@selectedDivisionId"
+                        @onchange="OnDivisionFilterChanged">
+                    @if (divisions == null || divisions.Count == 0)
+                    {
+                        <option value="">-- No Divisions Available --</option>
+                    }
+                    else
+                    {
+                        @if (divisions.Count > 1)
+                        {
+                            <option value="">-- Select Division --</option>
+                        }
+                        @foreach (var d in divisions)
+                        {
+                            <option value="@d.Id">@d.Name</option>
+                        }
+                    }
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-0">
+        <DataTable TItem="SectionDto"
+                   Items="@sections"
+                   IsLoading="@isLoading"
+                   ErrorMessage="@errorMessage"
+                   OnRetry="@LoadSections">
+            <HeaderContent>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Users</th>
+                <th>Created</th>
+                <th class="text-end">Actions</th>
+            </HeaderContent>
+            <RowTemplate Context="section">
+                <td>
+                    <strong class="section-row-name" id="section-name-@section.Name">@section.Name</strong>
+                </td>
+                <td>@section.Description</td>
+                <td><span class="badge bg-secondary">@section.TotalUsers</span></td>
+                <td>@section.CreatedAt.ToLocalTime().ToString("g")</td>
+                <td class="text-end">
+                    <div class="btn-group btn-group-sm">
+                        <PermissionView Requires="section.update">
+                            <a href="/sections/@section.Id/edit?divisionId=@section.DivisionId"
+                               class="btn btn-outline btn-sm me-1 section-edit-btn"
+                               id="edit-btn-@section.Name"
+                               title="Edit Section">
+                                Edit
+                            </a>
+                        </PermissionView>
+                        <PermissionView Requires="section.delete">
+                            <button class="btn btn-outline-danger btn-sm section-delete-btn"
+                                    id="delete-btn-@section.Name"
+                                    title="Delete Section"
+                                    @onclick="() => PromptDelete(section)">
+                                Delete
+                            </button>
+                        </PermissionView>
+                    </div>
+                </td>
+            </RowTemplate>
+        </DataTable>
+    </div>
+</div>
+
+<ConfirmDialog IsVisible="@isConfirmDeleteVisible"
+               Title="Delete Section"
+               Message="@($"Are you sure you want to delete section '{sectionToDelete?.Name}'? All user assignments to this section must be removed first.")"
+               ConfirmText="Delete Section"
+               OnConfirm="@ConfirmDelete"
+               OnCancel="@CancelDelete" />
+
+@code {
+    private IReadOnlyList<DivisionDto>? divisions;
+    private IReadOnlyList<SectionDto>? sections;
+    private Guid? selectedDivisionId;
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    private bool isConfirmDeleteVisible;
+    private SectionDto? sectionToDelete;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDivisions();
+    }
+
+    private async Task LoadDivisions()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            divisions = await DivisionApi.GetDivisionsAsync();
+            if (divisions != null && divisions.Count > 0)
+            {
+                selectedDivisionId = divisions[0].Id;
+                await LoadSections();
+            }
+            else
+            {
+                sections = Array.Empty<SectionDto>();
+                isLoading = false;
+            }
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Problem?.Detail ?? ex.Message;
+            isLoading = false;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load divisions: {ex.Message}";
+            isLoading = false;
+        }
+    }
+
+    private async Task OnDivisionFilterChanged(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString();
+        if (Guid.TryParse(val, out var divId))
+        {
+            selectedDivisionId = divId;
+            await LoadSections();
+        }
+        else
+        {
+            selectedDivisionId = null;
+            sections = Array.Empty<SectionDto>();
+        }
+    }
+
+    private async Task LoadSections()
+    {
+        if (!selectedDivisionId.HasValue)
+        {
+            sections = Array.Empty<SectionDto>();
+            isLoading = false;
+            return;
+        }
+
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            sections = await SectionApi.GetSectionsByDivisionAsync(selectedDivisionId.Value);
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Problem?.Detail ?? ex.Message;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load sections: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void PromptDelete(SectionDto section)
+    {
+        sectionToDelete = section;
+        isConfirmDeleteVisible = true;
+    }
+
+    private void CancelDelete()
+    {
+        sectionToDelete = null;
+        isConfirmDeleteVisible = false;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (sectionToDelete == null) return;
+
+        try
+        {
+            await SectionApi.DeleteSectionAsync(sectionToDelete.Id);
+            ToastService.ShowSuccess($"Section '{sectionToDelete.Name}' was successfully deleted.");
+            isConfirmDeleteVisible = false;
+            sectionToDelete = null;
+            await LoadSections();
+        }
+        catch (ApiException ex)
+        {
+            ToastService.ShowError($"Failed to delete section: {ex.Problem?.Detail ?? ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"An unexpected error occurred: {ex.Message}");
+        }
+    }
+}

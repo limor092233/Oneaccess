@@ -1,4 +1,5 @@
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
 using OneAccess.Application.Common.Interfaces;
 
 namespace OneAccess.Application.Features.Sections.Commands.CreateSection;
@@ -13,10 +14,10 @@ public class CreateSectionCommandValidator : AbstractValidator<CreateSectionComm
         RuleFor(x => x.Name)
             .NotEmpty().WithMessage("Section name is required.")
             .MaximumLength(100).WithMessage("Section name must not exceed 100 characters.")
-            .Must((command, name) =>
+            .MustAsync(async (command, name, ct) =>
             {
                 var lower = name.Trim().ToLower();
-                return !readDbContext.Sections.Any(s => s.DivisionId == command.DivisionId && s.Name.ToLower() == lower);
+                return !await readDbContext.Sections.AnyAsync(s => s.DivisionId == command.DivisionId && s.Name.ToLower() == lower, ct);
             })
             .WithMessage("A section with this name already exists in this division.");
 
