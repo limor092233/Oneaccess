@@ -62,6 +62,8 @@ app.MapSetupEndpoints();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapRoleEndpoints();
+app.MapDivisionEndpoints();
+app.MapSectionEndpoints();
 app.MapJwksEndpoints();
 app.MapOneAccessHealthChecks(builder.Configuration);
 

@@ -121,13 +121,13 @@ public static class PermissionSeeder
         // 3. Seed Role Permissions for System Administrator (all permissions)
         var sysAdmin = existingRoles[SystemRoles.SystemAdministrator];
         var allDbPermissions = await context.Permissions.ToListAsync(ct);
-        var existingRolePerms = await context.RolePermissions
+        var existingSysAdminPerms = await context.RolePermissions
             .Where(rp => rp.RoleId == sysAdmin.Id)
             .Select(rp => rp.PermissionId)
             .ToListAsync(ct);
 
         var sysAdminPermsToAdd = allDbPermissions
-            .Where(p => !existingRolePerms.Contains(p.Id))
+            .Where(p => !existingSysAdminPerms.Contains(p.Id))
             .Select(p => new RolePermission
             {
                 RoleId = sysAdmin.Id,
@@ -138,7 +138,62 @@ public static class PermissionSeeder
         if (sysAdminPermsToAdd.Count != 0)
         {
             await context.RolePermissions.AddRangeAsync(sysAdminPermsToAdd, ct);
-            await context.SaveChangesAsync(ct);
         }
+
+        // 4. Seed Role Permissions for Administrator (delegable division/user/section management)
+        var admin = existingRoles[SystemRoles.Administrator];
+        var adminPermCodes = new HashSet<string>
+        {
+            "user.view", "user.create", "user.update", "user.delete",
+            "role.view", "permission.view",
+            "division.view",
+            "section.view", "section.create", "section.update", "section.delete",
+            "subsystem.view"
+        };
+        var existingAdminPerms = await context.RolePermissions
+            .Where(rp => rp.RoleId == admin.Id)
+            .Select(rp => rp.PermissionId)
+            .ToListAsync(ct);
+
+        var adminPermsToAdd = allDbPermissions
+            .Where(p => adminPermCodes.Contains(p.Code) && !existingAdminPerms.Contains(p.Id))
+            .Select(p => new RolePermission
+            {
+                RoleId = admin.Id,
+                PermissionId = p.Id
+            })
+            .ToList();
+
+        if (adminPermsToAdd.Count != 0)
+        {
+            await context.RolePermissions.AddRangeAsync(adminPermsToAdd, ct);
+        }
+
+        // 5. Seed Role Permissions for User (basic portal view)
+        var standardUser = existingRoles[SystemRoles.User];
+        var userPermCodes = new HashSet<string>
+        {
+            "subsystem.view"
+        };
+        var existingUserPerms = await context.RolePermissions
+            .Where(rp => rp.RoleId == standardUser.Id)
+            .Select(rp => rp.PermissionId)
+            .ToListAsync(ct);
+
+        var userPermsToAdd = allDbPermissions
+            .Where(p => userPermCodes.Contains(p.Code) && !existingUserPerms.Contains(p.Id))
+            .Select(p => new RolePermission
+            {
+                RoleId = standardUser.Id,
+                PermissionId = p.Id
+            })
+            .ToList();
+
+        if (userPermsToAdd.Count != 0)
+        {
+            await context.RolePermissions.AddRangeAsync(userPermsToAdd, ct);
+        }
+
+        await context.SaveChangesAsync(ct);
     }
 }
