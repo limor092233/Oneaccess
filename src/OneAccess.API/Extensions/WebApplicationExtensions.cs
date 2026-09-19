@@ -18,19 +18,23 @@ namespace OneAccess.API.Extensions;
 /// </summary>
 public static class WebApplicationExtensions
 {
-    public static IServiceCollection AddApiServices(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddApiServices(this IServiceCollection services, IConfiguration configuration, IWebHostEnvironment environment)
     {
         // 1. Cookie Authentication (Standard ASP.NET Core session cookie)
         var cookieSection = configuration.GetSection(InfrastructureCookieOptions.SectionName);
         var cookieName = cookieSection["Name"] ?? "oneaccess.session";
         var expiryMinutes = configuration.GetValue<int?>("Cookie:ExpiryMinutes") ?? 480;
+        var configuredSecure = configuration.GetValue<bool?>("Cookie:Secure") ?? true;
 
         services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
             .AddCookie(options =>
             {
                 options.Cookie.Name = cookieName;
                 options.Cookie.HttpOnly = true;
-                options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+                // Enforce SecurePolicy.Always in non-development environments or when explicitly configured
+                options.Cookie.SecurePolicy = environment.IsDevelopment()
+                    ? (configuredSecure ? CookieSecurePolicy.SameAsRequest : CookieSecurePolicy.None)
+                    : CookieSecurePolicy.Always;
                 options.Cookie.SameSite = SameSiteMode.Strict;
                 options.ExpireTimeSpan = TimeSpan.FromMinutes(expiryMinutes);
                 options.SlidingExpiration = true;
