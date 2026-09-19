@@ -12,6 +12,9 @@ public class UserDivisionAssignmentConfiguration : IEntityTypeConfiguration<User
 
         builder.HasKey(uda => new { uda.UserId, uda.DivisionId });
 
+        builder.HasIndex(uda => new { uda.UserId, uda.DivisionId })
+            .IsUnique();
+
         builder.Property(uda => uda.GrantedAt)
             .IsRequired();
 

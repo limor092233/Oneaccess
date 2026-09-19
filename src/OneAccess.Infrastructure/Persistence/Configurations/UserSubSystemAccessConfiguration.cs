@@ -12,6 +12,9 @@ public class UserSubSystemAccessConfiguration : IEntityTypeConfiguration<UserSub
 
         builder.HasKey(usa => new { usa.UserId, usa.SubSystemId });
 
+        builder.HasIndex(usa => new { usa.UserId, usa.SubSystemId })
+            .IsUnique();
+
         builder.Property(usa => usa.GrantedAt)
             .IsRequired();
 

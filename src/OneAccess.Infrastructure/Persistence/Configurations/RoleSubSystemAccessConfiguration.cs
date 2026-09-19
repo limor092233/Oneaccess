@@ -12,6 +12,9 @@ public class RoleSubSystemAccessConfiguration : IEntityTypeConfiguration<RoleSub
 
         builder.HasKey(rsa => new { rsa.RoleId, rsa.SubSystemId });
 
+        builder.HasIndex(rsa => new { rsa.RoleId, rsa.SubSystemId })
+            .IsUnique();
+
         builder.Property(rsa => rsa.GrantedAt)
             .IsRequired();
 
