@@ -1,0 +1,53 @@
+@inherits LayoutComponentBase
+@inject HttpClient Http
+@inject CookieAuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<div class="page">
+    <header class="top-row px-4">
+        <div class="brand">
+            <a href="/"><strong>OneAccess</strong></a>
+        </div>
+        <div class="auth-status">
+            <AuthorizeView>
+                <Authorized>
+                    <span class="status-badge status-logged-in" id="auth-status-logged-in">
+                        Logged in as <strong>@context.User.Identity?.Name</strong>
+                    </span>
+                    <button class="btn btn-outline btn-sm ms-2" id="logout-btn" @onclick="HandleLogout">Logout</button>
+                </Authorized>
+                <NotAuthorized>
+                    <span class="status-badge status-not-logged-in" id="auth-status-not-logged-in">
+                        Not logged in
+                    </span>
+                    <a href="/login" class="btn btn-outline btn-sm ms-2" id="nav-login-link">Login</a>
+                </NotAuthorized>
+            </AuthorizeView>
+        </div>
+    </header>
+
+    <main class="main-content">
+        <div class="content px-4 py-3">
+            @Body
+        </div>
+    </main>
+</div>
+
+@code {
+    private async Task HandleLogout()
+    {
+        try
+        {
+            await Http.PostAsync("/api/auth/logout", null);
+        }
+        catch
+        {
+            // Ignore network errors during logout
+        }
+        finally
+        {
+            AuthStateProvider.NotifyStateChanged();
+            Navigation.NavigateTo("/login");
+        }
+    }
+}

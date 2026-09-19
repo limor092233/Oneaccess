@@ -1,0 +1,105 @@
+@page "/login"
+@inject HttpClient Http
+@inject CookieAuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Navigation
+
+<PageTitle>OneAccess - Login</PageTitle>
+
+<div class="login-wrapper">
+    <div class="login-card">
+        <div class="login-header">
+            <h2>Sign In</h2>
+            <p>Enter your OneAccess credentials to continue</p>
+        </div>
+
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-danger" id="login-error-alert" role="alert">
+                <strong>Error:</strong> <span id="login-error-detail">@errorMessage</span>
+            </div>
+        }
+
+        <EditForm Model="@loginModel" OnSubmit="HandleLogin">
+            <div class="form-group mb-3">
+                <label for="username-input" class="form-label">Username</label>
+                <input id="username-input" class="form-control" @bind="loginModel.Username" @bind:event="oninput" placeholder="e.g. sysadmin" />
+            </div>
+
+            <div class="form-group mb-3">
+                <label for="password-input" class="form-label">Password</label>
+                <input id="password-input" type="password" class="form-control" @bind="loginModel.Password" @bind:event="oninput" placeholder="••••••••••••" />
+            </div>
+
+            <div class="form-actions mt-4">
+                <button type="button" class="btn btn-primary w-100" id="login-submit-btn" @onclick="HandleLogin" disabled="@isLoading">
+                    @if (isLoading)
+                    {
+                        <span>Signing in...</span>
+                    }
+                    else
+                    {
+                        <span>Sign In</span>
+                    }
+                </button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private LoginRequest loginModel = new();
+    private string? errorMessage;
+    private bool isLoading;
+
+    private async Task HandleLogin()
+    {
+        errorMessage = null;
+        isLoading = true;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("/api/auth/login", loginModel);
+
+            if (response.IsSuccessStatusCode)
+            {
+                AuthStateProvider.NotifyStateChanged();
+                Navigation.NavigateTo("/");
+            }
+            else
+            {
+                try
+                {
+                    var problem = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+                    if (!string.IsNullOrWhiteSpace(problem?.Detail))
+                    {
+                        errorMessage = problem.Detail;
+                    }
+                    else if (problem?.Errors != null && problem.Errors.Count > 0)
+                    {
+                        errorMessage = string.Join(" ", problem.Errors.SelectMany(kv => kv.Value));
+                    }
+                    else if (!string.IsNullOrWhiteSpace(problem?.Title))
+                    {
+                        errorMessage = problem.Title;
+                    }
+                    else
+                    {
+                        errorMessage = $"Authentication failed ({response.StatusCode}).";
+                    }
+                }
+                catch
+                {
+                    errorMessage = $"Authentication failed ({response.StatusCode}).";
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"An unexpected error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}

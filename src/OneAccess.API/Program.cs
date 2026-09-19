@@ -42,22 +42,26 @@ app.UseSerilogRequestLogging();
 // 4. HTTPS Redirection
 app.UseHttpsRedirection();
 
-// 5. CORS
+// 5. Blazor WASM & Static Files
+app.UseBlazorFrameworkFiles();
+app.UseStaticFiles();
+
+// 6. CORS
 app.UseCors();
 
-// 6. Rate Limiting
+// 7. Rate Limiting
 app.UseRateLimiter();
 
-// 7. Authentication
+// 8. Authentication
 app.UseAuthentication();
 
-// 8. Authorization
+// 9. Authorization
 app.UseAuthorization();
 
-// 9. SetupGuardMiddleware
+// 10. SetupGuardMiddleware
 app.UseMiddleware<SetupGuardMiddleware>();
 
-// 10. Endpoints
+// 11. Endpoints
 app.MapSetupEndpoints();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
@@ -69,6 +73,9 @@ app.MapSectionEndpoints();
 app.MapSubSystemEndpoints();
 app.MapJwksEndpoints();
 app.MapOneAccessHealthChecks(builder.Configuration);
+
+// 12. Client SPA Fallback
+app.MapFallbackToFile("index.html");
 
 // 5. Initialize DB Seeding & First-Run Setup Check
 await app.InitializeApplicationAsync();

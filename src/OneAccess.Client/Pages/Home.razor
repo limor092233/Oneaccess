@@ -1,0 +1,42 @@
+@page "/"
+
+<PageTitle>OneAccess - Home</PageTitle>
+
+<div class="home-container">
+    <h1>Welcome to OneAccess</h1>
+    <p class="lead">Centralized Authentication &amp; Access Governance</p>
+
+    <AuthorizeView>
+        <Authorized>
+            <div class="card card-success mt-4">
+                <div class="card-header">
+                    <h3>Authentication State: Authenticated</h3>
+                </div>
+                <div class="card-body">
+                    <p id="home-welcome-message">Hello, <strong>@context.User.Identity?.Name</strong>! You are currently logged in.</p>
+                    <div class="claims-summary">
+                        <h4>Assigned Roles &amp; Permissions:</h4>
+                        <ul>
+                            @foreach (var claim in context.User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role || c.Type == "role" || c.Type == "permission"))
+                            {
+                                <li><code>@claim.Type</code>: <strong>@claim.Value</strong></li>
+                            }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </Authorized>
+        <NotAuthorized>
+            <div class="card card-neutral mt-4">
+                <div class="card-header">
+                    <h3>Authentication State: Anonymous</h3>
+                </div>
+                <div class="card-body">
+                    <p id="home-not-logged-in-message">You are currently <strong>not logged in</strong>.</p>
+                    <p>Please log in with your credentials to access OneAccess administrative features.</p>
+                    <a href="/login" class="btn btn-primary" id="home-login-btn">Go to Login</a>
+                </div>
+            </div>
+        </NotAuthorized>
+    </AuthorizeView>
+</div>
