@@ -19,6 +19,11 @@ public static class SerilogConfigurator
     public static readonly Func<LogEvent, bool> IsSetupCodeEvent =
         le => le.Properties.ContainsKey(SetupCodePropertyName);
 
+    /// <summary>
+    /// Configures Serilog from IConfiguration.
+    /// Console sink is unfiltered (so setup code is printed to CLI).
+    /// Non-console sinks (e.g. File) are wrapped in sub-loggers that exclude IsSetupCode events.
+    /// </summary>
     public static void Configure(LoggerConfiguration loggerConfig, IConfiguration configuration)
     {
         loggerConfig
@@ -26,6 +31,29 @@ public static class SerilogConfigurator
             .Enrich.FromLogContext()
             .Enrich.WithMachineName()
             .Enrich.WithEnvironmentName();
+
+        var logFilePath = configuration["Serilog:File:Path"] ?? configuration["Logging:FilePath"];
+        if (!string.IsNullOrWhiteSpace(logFilePath))
+        {
+            loggerConfig.WriteTo.Logger(lc => lc
+                .Filter.ByExcluding(IsSetupCodeEvent)
+                .WriteTo.File(logFilePath, rollingInterval: RollingInterval.Day));
+        }
+    }
+
+    /// <summary>
+    /// Extension helper to attach any non-console sink with the IsSetupCode exclusion sub-pipeline.
+    /// </summary>
+    public static LoggerConfiguration WriteToNonConsole(
+        this LoggerConfiguration loggerConfig,
+        Action<LoggerConfiguration> configureSink)
+    {
+        return loggerConfig.WriteTo.Logger(lc =>
+        {
+            lc.Filter.ByExcluding(IsSetupCodeEvent);
+            configureSink(lc);
+        });
     }
 }
+
 

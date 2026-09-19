@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OneAccess.Application.Common.Interfaces;
 using OneAccess.Domain.Entities;
+using OneAccess.Infrastructure.Logging;
 using OneAccess.Infrastructure.Options;
 
 namespace OneAccess.Infrastructure.Services;
@@ -60,7 +61,8 @@ public class SetupCodeService : ISetupCodeService
         if (_setupOptions.ConsoleOutputEnabled)
         {
             // Emitted with IsSetupCode structured property per OneAccess.md Section 12
-            using (_logger.BeginScope(new Dictionary<string, object> { ["IsSetupCode"] = true }))
+            using (_logger.BeginScope(new Dictionary<string, object> { [SerilogConfigurator.SetupCodePropertyName] = true }))
+            using (Serilog.Context.LogContext.PushProperty(SerilogConfigurator.SetupCodePropertyName, true))
             {
                 _logger.LogInformation("\n=========================================\n[SETUP] First-Run System Administrator Setup\n[SETUP] Setup Code: {SetupCode}\n[SETUP] Expires in {ExpiryMinutes} minutes\n=========================================\n",
                     rawCode, _setupOptions.CodeExpiryMinutes);

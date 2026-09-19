@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\OneAccess.Domain\OneAccess.Domain.csproj" />
     <ProjectReference Include="..\..\src\OneAccess.Application\OneAccess.Application.csproj" />
+    <ProjectReference Include="..\..\src\OneAccess.Infrastructure\OneAccess.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>
