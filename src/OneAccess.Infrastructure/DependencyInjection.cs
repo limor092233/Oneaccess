@@ -63,20 +63,19 @@ public static class DependencyInjection
 
         // 3. Persistence (DbContext, IReadDbContext, Repositories, UnitOfWork)
         var connectionString = configuration.GetConnectionString("DefaultConnection");
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                "Connection string 'DefaultConnection' is missing or empty. " +
+                "A valid SQL Server connection string is required for OneAccess. " +
+                "Configure 'ConnectionStrings:DefaultConnection' via appsettings.json, environment variables, or secrets.");
+        }
+
         services.AddDbContext<OneAccessDbContext>((sp, options) =>
         {
             var interceptor = sp.GetRequiredService<AuditableEntityInterceptor>();
             options.AddInterceptors(interceptor);
-
-            if (!string.IsNullOrWhiteSpace(connectionString))
-            {
-                options.UseSqlServer(connectionString);
-            }
-            else
-            {
-                // Fallback to in-memory/sqlite if connection string empty in dev
-                options.UseInMemoryDatabase("OneAccessDb");
-            }
+            options.UseSqlServer(connectionString);
         });
 
         services.AddScoped<DbContext>(sp => sp.GetRequiredService<OneAccessDbContext>());

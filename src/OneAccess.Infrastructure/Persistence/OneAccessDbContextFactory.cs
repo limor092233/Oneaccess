@@ -12,7 +12,7 @@ public class OneAccessDbContextFactory : IDesignTimeDbContextFactory<OneAccessDb
     public OneAccessDbContext CreateDbContext(string[] args)
     {
         var optionsBuilder = new DbContextOptionsBuilder<OneAccessDbContext>();
-        optionsBuilder.UseSqlServer("Server=(localdb)\\mssqllocaldb;Database=OneAccessDb;Trusted_Connection=True;MultipleActiveResultSets=true");
+        optionsBuilder.UseSqlServer("Server=.\\SQLEXPRESS;Database=OneAccessDb;Trusted_Connection=True;TrustServerCertificate=True;MultipleActiveResultSets=true;");
 
         return new OneAccessDbContext(optionsBuilder.Options);
     }

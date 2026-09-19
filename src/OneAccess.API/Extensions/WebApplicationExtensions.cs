@@ -168,6 +168,7 @@ public static class WebApplicationExtensions
         catch (Exception ex)
         {
             logger.LogError(ex, "An error occurred during application initialization/seeding.");
+            throw;
         }
     }
 }
