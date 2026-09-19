@@ -1,0 +1,329 @@
+@page "/users/new"
+@page "/users/{Id:guid}/edit"
+@attribute [Authorize]
+@inject IUserApi UserApi
+@inject IDivisionApi DivisionApi
+@inject NavigationManager Navigation
+@inject ToastService ToastService
+
+<PageTitle>OneAccess - @(IsEditMode ? "Edit User" : "Create User")</PageTitle>
+
+<div class="form-page-container">
+    <div class="page-header mb-4">
+        <h2>@(IsEditMode ? $"Edit User: {usernameReadOnly}" : "Create New User")</h2>
+        <p class="text-secondary">@(IsEditMode ? "Update user profile details and status." : "Add a new user to the directory.")</p>
+    </div>
+
+    @if (!string.IsNullOrEmpty(generalError))
+    {
+        <div class="alert alert-danger mb-4" id="user-form-error-alert" role="alert">
+            <strong>Error:</strong> <span id="user-form-error-text">@generalError</span>
+        </div>
+    }
+
+    <div class="card p-4">
+        <EditForm Model="@formModel" OnSubmit="@HandleSubmit">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="user-username-input" class="form-label">Username</label>
+                    <input type="text" class="form-control @(GetFieldError("Username") != null ? "is-invalid" : "")"
+                           id="user-username-input"
+                           @bind="formModel.Username"
+                           @bind:event="oninput"
+                           disabled="@IsEditMode"
+                           placeholder="e.g. jdoe" />
+                    @if (GetFieldError("Username") != null)
+                    {
+                        <div class="invalid-feedback d-block field-error" id="error-Username">@GetFieldError("Username")</div>
+                    }
+                </div>
+
+                <div class="col-md-6">
+                    <label for="user-email-input" class="form-label">Email Address</label>
+                    <input type="email" class="form-control @(GetFieldError("Email") != null ? "is-invalid" : "")"
+                           id="user-email-input"
+                           @bind="formModel.Email"
+                           @bind:event="oninput"
+                           placeholder="jdoe@example.com" />
+                    @if (GetFieldError("Email") != null)
+                    {
+                        <div class="invalid-feedback d-block field-error" id="error-Email">@GetFieldError("Email")</div>
+                    }
+                </div>
+
+                <div class="col-md-6">
+                    <label for="user-fullname-input" class="form-label">Full Name</label>
+                    <input type="text" class="form-control @(GetFieldError("FullName") != null ? "is-invalid" : "")"
+                           id="user-fullname-input"
+                           @bind="formModel.FullName"
+                           @bind:event="oninput"
+                           placeholder="Jane Doe" />
+                    @if (GetFieldError("FullName") != null)
+                    {
+                        <div class="invalid-feedback d-block field-error" id="error-FullName">@GetFieldError("FullName")</div>
+                    }
+                </div>
+
+                @if (!IsEditMode)
+                {
+                    <div class="col-md-6">
+                        <label for="user-password-input" class="form-label">Temporary Password</label>
+                        <input type="password" class="form-control @(GetFieldError("Password") != null ? "is-invalid" : "")"
+                               id="user-password-input"
+                               @bind="formModel.Password"
+                               @bind:event="oninput"
+                               placeholder="••••••••••••" />
+                        @if (GetFieldError("Password") != null)
+                        {
+                            <div class="invalid-feedback d-block field-error" id="error-Password">@GetFieldError("Password")</div>
+                        }
+                    </div>
+                }
+
+                @if (IsEditMode)
+                {
+                    <div class="col-md-6">
+                        <label for="user-status-select" class="form-label">Account Status</label>
+                        <select class="form-control form-select" id="user-status-select" @bind="formModel.Status">
+                            <option value="@UserStatus.Active">Active</option>
+                            <option value="@UserStatus.Inactive">Inactive</option>
+                            <option value="@UserStatus.Suspended">Suspended</option>
+                        </select>
+                    </div>
+                }
+
+                <div class="col-md-6">
+                    <label for="user-division-select" class="form-label">Division (Optional)</label>
+                    <select class="form-control form-select @(GetFieldError("DivisionId") != null ? "is-invalid" : "")"
+                            id="user-division-select"
+                            @onchange="OnDivisionChanged">
+                        <option value="">-- No Division --</option>
+                        @if (divisions != null)
+                        {
+                            @foreach (var d in divisions)
+                            {
+                                <option value="@d.Id" selected="@(formModel.DivisionId == d.Id)">@d.Name</option>
+                            }
+                        }
+                    </select>
+                    @if (GetFieldError("DivisionId") != null)
+                    {
+                        <div class="invalid-feedback d-block field-error" id="error-DivisionId">@GetFieldError("DivisionId")</div>
+                    }
+                </div>
+
+                <div class="col-md-6">
+                    <label for="user-section-select" class="form-label">Section (Optional)</label>
+                    <select class="form-control form-select @(GetFieldError("SectionId") != null ? "is-invalid" : "")"
+                            id="user-section-select"
+                            @bind="formModel.SectionId"
+                            disabled="@(sections == null || sections.Count == 0)">
+                        <option value="">-- No Section --</option>
+                        @if (sections != null)
+                        {
+                            @foreach (var s in sections)
+                            {
+                                <option value="@s.Id">@s.Name</option>
+                            }
+                        }
+                    </select>
+                    @if (GetFieldError("SectionId") != null)
+                    {
+                        <div class="invalid-feedback d-block field-error" id="error-SectionId">@GetFieldError("SectionId")</div>
+                    }
+                </div>
+            </div>
+
+            <div class="form-actions d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                <a href="/users" class="btn btn-outline" id="user-cancel-btn">Cancel</a>
+                <button type="button" class="btn btn-primary" id="user-save-btn" disabled="@isSaving" @onclick="HandleSubmit">
+                    @(isSaving ? "Saving..." : (IsEditMode ? "Save Changes" : "Create User"))
+                </button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private bool IsEditMode => Id.HasValue && Id != Guid.Empty;
+
+    private class UserFormViewModel
+    {
+        public string Username { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public Guid? DivisionId { get; set; }
+        public Guid? SectionId { get; set; }
+        public UserStatus Status { get; set; } = UserStatus.Active;
+    }
+
+    private UserFormViewModel formModel = new();
+    private string usernameReadOnly = string.Empty;
+    private IReadOnlyList<DivisionDto>? divisions;
+    private IReadOnlyList<SectionDto>? sections;
+    private Dictionary<string, string[]> fieldErrors = new(StringComparer.OrdinalIgnoreCase);
+    private string? generalError;
+    private bool isSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadDivisions();
+
+        if (IsEditMode)
+        {
+            await LoadUser(Id!.Value);
+        }
+    }
+
+    private async Task LoadDivisions()
+    {
+        try
+        {
+            divisions = await DivisionApi.GetDivisionsAsync();
+        }
+        catch
+        {
+            divisions = Array.Empty<DivisionDto>();
+        }
+    }
+
+    private async Task LoadUser(Guid userId)
+    {
+        try
+        {
+            var user = await UserApi.GetUserByIdAsync(userId);
+            if (user != null)
+            {
+                usernameReadOnly = user.Username;
+                formModel = new UserFormViewModel
+                {
+                    Username = user.Username,
+                    Email = user.Email,
+                    FullName = user.FullName,
+                    DivisionId = user.DivisionId,
+                    SectionId = user.SectionId,
+                    Status = user.Status
+                };
+
+                if (user.DivisionId.HasValue)
+                {
+                    sections = await DivisionApi.GetSectionsByDivisionAsync(user.DivisionId.Value);
+                }
+            }
+        }
+        catch (ApiException ex)
+        {
+            generalError = ex.Message;
+        }
+    }
+
+    private async Task OnDivisionChanged(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString();
+        if (Guid.TryParse(val, out var divId))
+        {
+            formModel.DivisionId = divId;
+            try
+            {
+                sections = await DivisionApi.GetSectionsByDivisionAsync(divId);
+            }
+            catch
+            {
+                sections = Array.Empty<SectionDto>();
+            }
+        }
+        else
+        {
+            formModel.DivisionId = null;
+            sections = null;
+            formModel.SectionId = null;
+        }
+    }
+
+    private string? GetFieldError(string fieldName)
+    {
+        if (fieldErrors.TryGetValue(fieldName, out var errors) && errors.Length > 0)
+        {
+            return string.Join("; ", errors);
+        }
+
+        // Check for general division/section cross-validation error
+        if (fieldName.Equals("SectionId", StringComparison.OrdinalIgnoreCase) || fieldName.Equals("DivisionId", StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var key in new[] { string.Empty, "CreateUserCommand", "UpdateUserCommand", "User", "DivisionId", "SectionId" })
+            {
+                if (fieldErrors.TryGetValue(key, out var rootErrors) && rootErrors.Length > 0)
+                {
+                    var matched = rootErrors.FirstOrDefault(r => r.Contains("Division", StringComparison.OrdinalIgnoreCase) || r.Contains("Section", StringComparison.OrdinalIgnoreCase));
+                    if (matched != null) return matched;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private async Task HandleSubmit()
+    {
+        fieldErrors.Clear();
+        generalError = null;
+        isSaving = true;
+
+        try
+        {
+            if (IsEditMode)
+            {
+                var req = new UpdateUserRequest
+                {
+                    Email = formModel.Email,
+                    FullName = formModel.FullName,
+                    DivisionId = formModel.DivisionId,
+                    SectionId = formModel.SectionId,
+                    Status = formModel.Status
+                };
+                await UserApi.UpdateUserAsync(Id!.Value, req);
+                ToastService.ShowSuccess($"User '{usernameReadOnly}' updated successfully.");
+                Navigation.NavigateTo("/users");
+            }
+            else
+            {
+                var req = new CreateUserRequest
+                {
+                    Username = formModel.Username,
+                    Email = formModel.Email,
+                    FullName = formModel.FullName,
+                    Password = formModel.Password,
+                    DivisionId = formModel.DivisionId,
+                    SectionId = formModel.SectionId
+                };
+                var created = await UserApi.CreateUserAsync(req);
+                ToastService.ShowSuccess($"User '{formModel.Username}' created successfully.");
+                Navigation.NavigateTo("/users");
+            }
+        }
+        catch (ApiException ex)
+        {
+            if (ex.Problem?.Errors != null && ex.Problem.Errors.Count > 0)
+            {
+                fieldErrors = new Dictionary<string, string[]>(ex.Problem.Errors, StringComparer.OrdinalIgnoreCase);
+                generalError = ex.Problem.Detail ?? "Please correct the validation errors below.";
+            }
+            else
+            {
+                generalError = ex.Problem?.Detail ?? ex.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            generalError = $"An unexpected error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}

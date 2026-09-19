@@ -1,0 +1,25 @@
+<div class="nav-menu">
+    <nav class="nav flex-column">
+        <div class="nav-item px-3 mb-1">
+            <NavLink class="nav-link" href="" Match="NavLinkMatch.All" id="nav-home-link">
+                <span class="nav-icon">🏠</span> Dashboard
+            </NavLink>
+        </div>
+
+        <PermissionView Requires="user.view">
+            <div class="nav-item px-3 mb-1">
+                <NavLink class="nav-link" href="users" id="nav-users-link">
+                    <span class="nav-icon">👥</span> Users
+                </NavLink>
+            </div>
+        </PermissionView>
+
+        <PermissionView Requires="role.view">
+            <div class="nav-item px-3 mb-1">
+                <NavLink class="nav-link" href="roles" id="nav-roles-link">
+                    <span class="nav-icon">🛡️</span> Roles
+                </NavLink>
+            </div>
+        </PermissionView>
+    </nav>
+</div>

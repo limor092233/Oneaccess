@@ -1,0 +1,183 @@
+@page "/roles/new"
+@page "/roles/{Id:guid}/edit"
+@attribute [Authorize]
+@inject IRoleApi RoleApi
+@inject NavigationManager Navigation
+@inject ToastService ToastService
+
+<PageTitle>OneAccess - @(IsEditMode ? "Edit Role" : "Create Role")</PageTitle>
+
+<div class="form-page-container">
+    <div class="page-header mb-4">
+        <h2>@(IsEditMode ? $"Edit Role: {roleNameOriginal}" : "Create New Role")</h2>
+        <p class="text-secondary">@(IsEditMode ? "Update role information." : "Define a new custom security role.")</p>
+    </div>
+
+    @if (!string.IsNullOrEmpty(generalError))
+    {
+        <div class="alert alert-danger mb-4" id="role-form-error-alert" role="alert">
+            <strong>Error:</strong> <span id="role-form-error-text">@generalError</span>
+        </div>
+    }
+
+    <div class="card p-4">
+        <EditForm Model="@formModel" OnSubmit="@HandleSubmit">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="role-name-input" class="form-label">Role Name</label>
+                    <input type="text"
+                           class="form-control @(GetFieldError("Name") != null ? "is-invalid" : "")"
+                           id="role-name-input"
+                           @bind="formModel.Name"
+                           @bind:event="oninput"
+                           disabled="@(isSystemRole)"
+                           placeholder="e.g. Content Manager" />
+                    @if (isSystemRole)
+                    {
+                        <div class="form-text text-warning mt-1" id="system-role-rename-notice">
+                            ⚠️ System roles cannot be renamed.
+                        </div>
+                    }
+                    @if (GetFieldError("Name") != null)
+                    {
+                        <div class="invalid-feedback d-block field-error" id="error-Name">@GetFieldError("Name")</div>
+                    }
+                </div>
+
+                <div class="col-md-12">
+                    <label for="role-desc-input" class="form-label">Description</label>
+                    <textarea class="form-control @(GetFieldError("Description") != null ? "is-invalid" : "")"
+                              id="role-desc-input"
+                              rows="3"
+                              @bind="formModel.Description"
+                              @bind:event="oninput"
+                              placeholder="Describe the purpose and responsibilities of this role..."></textarea>
+                    @if (GetFieldError("Description") != null)
+                    {
+                        <div class="invalid-feedback d-block field-error" id="error-Description">@GetFieldError("Description")</div>
+                    }
+                </div>
+            </div>
+
+            <div class="form-actions d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                <a href="/roles" class="btn btn-outline" id="role-cancel-btn">Cancel</a>
+                <button type="button" class="btn btn-primary" id="role-save-btn" disabled="@isSaving" @onclick="HandleSubmit">
+                    @(isSaving ? "Saving..." : (IsEditMode ? "Save Changes" : "Create Role"))
+                </button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private bool IsEditMode => Id.HasValue && Id != Guid.Empty;
+
+    private class RoleFormViewModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Description { get; set; } = string.Empty;
+    }
+
+    private RoleFormViewModel formModel = new();
+    private string roleNameOriginal = string.Empty;
+    private bool isSystemRole;
+    private Dictionary<string, string[]> fieldErrors = new(StringComparer.OrdinalIgnoreCase);
+    private string? generalError;
+    private bool isSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (IsEditMode)
+        {
+            await LoadRole(Id!.Value);
+        }
+    }
+
+    private async Task LoadRole(Guid roleId)
+    {
+        try
+        {
+            var roles = await RoleApi.GetRolesAsync();
+            var role = roles?.FirstOrDefault(r => r.Id == roleId);
+            if (role != null)
+            {
+                roleNameOriginal = role.Name;
+                isSystemRole = role.IsSystemRole;
+                formModel = new RoleFormViewModel
+                {
+                    Name = role.Name,
+                    Description = role.Description
+                };
+            }
+        }
+        catch (ApiException ex)
+        {
+            generalError = ex.Message;
+        }
+    }
+
+    private string? GetFieldError(string fieldName)
+    {
+        if (fieldErrors.TryGetValue(fieldName, out var errors) && errors.Length > 0)
+        {
+            return string.Join("; ", errors);
+        }
+        return null;
+    }
+
+    private async Task HandleSubmit()
+    {
+        fieldErrors.Clear();
+        generalError = null;
+        isSaving = true;
+
+        try
+        {
+            if (IsEditMode)
+            {
+                var req = new UpdateRoleRequest
+                {
+                    Name = formModel.Name,
+                    Description = formModel.Description
+                };
+                await RoleApi.UpdateRoleAsync(Id!.Value, req);
+                ToastService.ShowSuccess($"Role '{formModel.Name}' updated successfully.");
+                Navigation.NavigateTo("/roles");
+            }
+            else
+            {
+                var req = new CreateRoleRequest
+                {
+                    Name = formModel.Name,
+                    Description = formModel.Description
+                };
+                var created = await RoleApi.CreateRoleAsync(req);
+                ToastService.ShowSuccess($"Role '{formModel.Name}' created successfully.");
+                Navigation.NavigateTo("/roles");
+            }
+        }
+        catch (ApiException ex)
+        {
+            if (ex.Problem?.Errors != null && ex.Problem.Errors.Count > 0)
+            {
+                fieldErrors = new Dictionary<string, string[]>(ex.Problem.Errors, StringComparer.OrdinalIgnoreCase);
+                generalError = ex.Problem.Detail ?? "Please correct the validation errors below.";
+            }
+            else
+            {
+                generalError = ex.Problem?.Detail ?? ex.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            generalError = $"An unexpected error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}

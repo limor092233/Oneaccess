@@ -16,6 +16,24 @@ public static class ResultExtensions
             return Results.Ok(new { message = "Success" });
         }
 
+        if (result.Errors != null && result.Errors.Count > 0)
+        {
+            var extensions = new Dictionary<string, object?>();
+            if (!string.IsNullOrEmpty(result.ErrorCode))
+            {
+                extensions["errorCode"] = result.ErrorCode;
+            }
+
+            return Results.ValidationProblem(
+                result.Errors,
+                detail: result.Error,
+                instance: instance,
+                statusCode: result.StatusCode,
+                title: "One or more validation errors occurred.",
+                extensions: extensions.Count > 0 ? extensions : null
+            );
+        }
+
         return ToProblem(result.StatusCode, result.Error, result.ErrorCode, instance);
     }
 
@@ -24,6 +42,24 @@ public static class ResultExtensions
         if (result.Succeeded)
         {
             return Results.Ok(result.Value);
+        }
+
+        if (result.Errors != null && result.Errors.Count > 0)
+        {
+            var extensions = new Dictionary<string, object?>();
+            if (!string.IsNullOrEmpty(result.ErrorCode))
+            {
+                extensions["errorCode"] = result.ErrorCode;
+            }
+
+            return Results.ValidationProblem(
+                result.Errors,
+                detail: result.Error,
+                instance: instance,
+                statusCode: result.StatusCode,
+                title: "One or more validation errors occurred.",
+                extensions: extensions.Count > 0 ? extensions : null
+            );
         }
 
         return ToProblem(result.StatusCode, result.Error, result.ErrorCode, instance);

@@ -1,0 +1,214 @@
+@page "/users"
+@attribute [Authorize]
+@inject IUserApi UserApi
+@inject NavigationManager Navigation
+@inject ToastService ToastService
+
+<PageTitle>OneAccess - Users</PageTitle>
+
+<div class="users-page-container">
+    <div class="page-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>User Management</h2>
+            <p class="text-secondary">View and manage system users and their directory assignments.</p>
+        </div>
+        <PermissionView Requires="user.create">
+            <a href="/users/new" class="btn btn-primary" id="new-user-btn">
+                <span>+ Create User</span>
+            </a>
+        </PermissionView>
+    </div>
+
+    <div class="table-toolbar card mb-4 p-3">
+        <div class="row g-3 align-items-center">
+            <div class="col-md-6">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="user-search-input" placeholder="Search by username, email, or full name..."
+                           @bind="searchTerm" @bind:event="oninput" @onkeydown="HandleSearchKeyDown" />
+                    <button class="btn btn-outline" id="user-search-btn" @onclick="SearchUsers">Search</button>
+                    @if (!string.IsNullOrWhiteSpace(searchTerm))
+                    {
+                        <button class="btn btn-outline" id="user-search-clear-btn" @onclick="ClearSearch">Clear</button>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card p-0">
+        <DataTable TItem="UserDto"
+                   Items="@users"
+                   IsLoading="@isLoading"
+                   ErrorMessage="@errorMessage"
+                   OnRetry="@LoadUsers">
+            <HeaderContent>
+                <th>Username</th>
+                <th>Full Name</th>
+                <th>Email</th>
+                <th>Status</th>
+                <th>SysAdmin</th>
+                <th>Created</th>
+                <th class="text-end">Actions</th>
+            </HeaderContent>
+            <RowTemplate Context="user">
+                <td>
+                    <strong class="user-row-username" id="user-name-@user.Username">@user.Username</strong>
+                </td>
+                <td>@user.FullName</td>
+                <td>@user.Email</td>
+                <td>
+                    <span class="status-badge status-badge-@user.Status.ToString().ToLowerInvariant()">
+                        @user.Status.ToString()
+                    </span>
+                </td>
+                <td>
+                    @if (user.IsSystemAdministrator)
+                    {
+                        <span class="badge bg-purple">SysAdmin</span>
+                    }
+                    else
+                    {
+                        <span class="text-muted">-</span>
+                    }
+                </td>
+                <td>@user.CreatedAt.ToLocalTime().ToString("g")</td>
+                <td class="text-end">
+                    <div class="btn-group btn-group-sm">
+                        <PermissionView Requires="user.update">
+                            <a href="/users/@user.Id/roles" class="btn btn-outline btn-sm me-1 user-roles-btn" id="roles-btn-@user.Username" title="Manage Roles">Roles</a>
+                            <a href="/users/@user.Id/edit" class="btn btn-outline btn-sm me-1 user-edit-btn" id="edit-btn-@user.Username" title="Edit User">Edit</a>
+                        </PermissionView>
+                        <PermissionView Requires="user.delete">
+                            <button class="btn btn-outline-danger btn-sm user-delete-btn" id="delete-btn-@user.Username" title="Delete User"
+                                    @onclick="() => PromptDelete(user)">Delete</button>
+                        </PermissionView>
+                    </div>
+                </td>
+            </RowTemplate>
+        </DataTable>
+
+        @if (pagedResult != null && pagedResult.TotalPages > 1)
+        {
+            <div class="pagination-container d-flex justify-content-between align-items-center p-3 border-top">
+                <span class="text-secondary small">
+                    Showing @(((pageNumber - 1) * pageSize) + 1) to @(Math.Min(pageNumber * pageSize, pagedResult.TotalCount)) of @pagedResult.TotalCount users
+                </span>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline btn-sm" disabled="@(!pagedResult.HasPreviousPage)" @onclick="() => ChangePage(pageNumber - 1)">Previous</button>
+                    <span class="btn btn-outline btn-sm disabled">Page @pageNumber of @pagedResult.TotalPages</span>
+                    <button class="btn btn-outline btn-sm" disabled="@(!pagedResult.HasNextPage)" @onclick="() => ChangePage(pageNumber + 1)">Next</button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<ConfirmDialog IsVisible="@isConfirmDeleteVisible"
+               Title="Delete User"
+               Message="@($"Are you sure you want to deactivate and soft-delete user '{userToDelete?.Username}'?")"
+               ConfirmText="Deactivate User"
+               OnConfirm="@ConfirmDelete"
+               OnCancel="@CancelDelete" />
+
+@code {
+    private IReadOnlyList<UserDto>? users;
+    private PagedResult<UserDto>? pagedResult;
+    private bool isLoading = true;
+    private string? errorMessage;
+    private string searchTerm = string.Empty;
+    private int pageNumber = 1;
+    private const int pageSize = 15;
+
+    private bool isConfirmDeleteVisible;
+    private UserDto? userToDelete;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+    }
+
+    private async Task LoadUsers()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            pagedResult = await UserApi.GetUsersAsync(pageNumber, pageSize, searchTerm);
+            users = pagedResult?.Items;
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load users: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task SearchUsers()
+    {
+        pageNumber = 1;
+        await LoadUsers();
+    }
+
+    private async Task ClearSearch()
+    {
+        searchTerm = string.Empty;
+        pageNumber = 1;
+        await LoadUsers();
+    }
+
+    private async Task HandleSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchUsers();
+        }
+    }
+
+    private async Task ChangePage(int newPage)
+    {
+        pageNumber = newPage;
+        await LoadUsers();
+    }
+
+    private void PromptDelete(UserDto user)
+    {
+        userToDelete = user;
+        isConfirmDeleteVisible = true;
+    }
+
+    private void CancelDelete()
+    {
+        userToDelete = null;
+        isConfirmDeleteVisible = false;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (userToDelete == null) return;
+
+        try
+        {
+            await UserApi.DeleteUserAsync(userToDelete.Id);
+            ToastService.ShowSuccess($"User '{userToDelete.Username}' was successfully deleted.");
+            isConfirmDeleteVisible = false;
+            userToDelete = null;
+            await LoadUsers();
+        }
+        catch (ApiException ex)
+        {
+            ToastService.ShowError($"Failed to delete user: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"An unexpected error occurred: {ex.Message}");
+        }
+    }
+}

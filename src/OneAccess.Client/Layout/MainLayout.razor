@@ -5,8 +5,8 @@
 
 <div class="page">
     <header class="top-row px-4">
-        <div class="brand">
-            <a href="/"><strong>OneAccess</strong></a>
+        <div class="brand d-flex align-items-center">
+            <a href="/" class="brand-link"><strong>OneAccess</strong></a>
         </div>
         <div class="auth-status">
             <AuthorizeView>
@@ -26,12 +26,24 @@
         </div>
     </header>
 
-    <main class="main-content">
-        <div class="content px-4 py-3">
-            @Body
-        </div>
-    </main>
+    <div class="app-layout">
+        <aside class="sidebar">
+            <AuthorizeView>
+                <Authorized>
+                    <NavMenu />
+                </Authorized>
+            </AuthorizeView>
+        </aside>
+
+        <main class="main-content">
+            <div class="content px-4 py-4">
+                @Body
+            </div>
+        </main>
+    </div>
 </div>
+
+<ToastContainer />
 
 @code {
     private async Task HandleLogout()

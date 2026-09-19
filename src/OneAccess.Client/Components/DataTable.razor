@@ -1,0 +1,79 @@
+@typeparam TItem
+
+<div class="data-table-container">
+    @if (IsLoading)
+    {
+        <div class="table-loading-container" id="datatable-loading">
+            <div class="loading-spinner"></div>
+            <p>Loading records...</p>
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(ErrorMessage))
+    {
+        <div class="alert alert-danger d-flex justify-content-between align-items-center" id="datatable-error" role="alert">
+            <div>
+                <strong>Error:</strong> @ErrorMessage
+            </div>
+            @if (OnRetry.HasDelegate)
+            {
+                <button class="btn btn-outline btn-sm ms-3" id="datatable-retry-btn" @onclick="OnRetry">Retry</button>
+            }
+        </div>
+    }
+    else if (Items == null || Items.Count == 0)
+    {
+        @if (EmptyContent != null)
+        {
+            @EmptyContent
+        }
+        else
+        {
+            <div class="empty-state-box" id="datatable-empty">
+                <p>No records found.</p>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table custom-table">
+                <thead>
+                    <tr>
+                        @HeaderContent
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Items)
+                    {
+                        <tr>
+                            @RowTemplate(item)
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter]
+    public IReadOnlyList<TItem>? Items { get; set; }
+
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+    [Parameter]
+    public string? ErrorMessage { get; set; }
+
+    [Parameter]
+    public EventCallback OnRetry { get; set; }
+
+    [Parameter]
+    public RenderFragment? HeaderContent { get; set; }
+
+    [Parameter]
+    public RenderFragment<TItem> RowTemplate { get; set; } = default!;
+
+    [Parameter]
+    public RenderFragment? EmptyContent { get; set; }
+}

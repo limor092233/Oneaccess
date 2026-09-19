@@ -31,19 +31,22 @@ public class ValidationBehavior<TRequest, TResponse> : IPipelineBehavior<TReques
         if (failures.Count != 0)
         {
             var errorMessage = string.Join("; ", failures.Select(f => f.ErrorMessage));
+            var errorsDict = failures
+                .GroupBy(f => f.PropertyName)
+                .ToDictionary(g => g.Key, g => g.Select(f => f.ErrorMessage).ToArray());
             
             // Check if TResponse is Result or Result<T>
             if (typeof(TResponse) == typeof(Result))
             {
-                return (TResponse)(object)Result.Failure(errorMessage, "ValidationError", 400);
+                return (TResponse)(object)Result.ValidationFailure(errorsDict, errorMessage);
             }
 
             if (typeof(TResponse).IsGenericType && typeof(TResponse).GetGenericTypeDefinition() == typeof(Result<>))
             {
-                var failureMethod = typeof(TResponse).GetMethod("Failure", new[] { typeof(string), typeof(string), typeof(int) });
+                var failureMethod = typeof(TResponse).GetMethod("ValidationFailure", new[] { typeof(Dictionary<string, string[]>), typeof(string) });
                 if (failureMethod != null)
                 {
-                    var result = failureMethod.Invoke(null, new object?[] { errorMessage, "ValidationError", 400 });
+                    var result = failureMethod.Invoke(null, new object?[] { errorsDict, errorMessage });
                     return (TResponse)result!;
                 }
             }

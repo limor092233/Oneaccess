@@ -1,0 +1,56 @@
+@using System.Security.Claims
+
+<AuthorizeView Policy="@Policy" Roles="@Roles">
+    <Authorized>
+        @if (HasRequiredPermission(context.User))
+        {
+            @if (ChildContent != null)
+            {
+                @ChildContent
+            }
+        }
+        else if (NotAuthorizedContent != null)
+        {
+            @NotAuthorizedContent
+        }
+    </Authorized>
+    <NotAuthorized>
+        @if (NotAuthorizedContent != null)
+        {
+            @NotAuthorizedContent
+        }
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    [Parameter]
+    public string? Requires { get; set; }
+
+    [Parameter]
+    public string? Roles { get; set; }
+
+    [Parameter]
+    public string? Policy { get; set; }
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public RenderFragment? NotAuthorizedContent { get; set; }
+
+    private bool HasRequiredPermission(ClaimsPrincipal user)
+    {
+        if (string.IsNullOrWhiteSpace(Requires))
+        {
+            return true;
+        }
+
+        // System Administrator holds all permissions
+        if (user.IsInRole("System Administrator") || user.HasClaim("role", "System Administrator"))
+        {
+            return true;
+        }
+
+        return user.HasClaim(c => c.Type == "permission" && string.Equals(c.Value, Requires, StringComparison.OrdinalIgnoreCase));
+    }
+}

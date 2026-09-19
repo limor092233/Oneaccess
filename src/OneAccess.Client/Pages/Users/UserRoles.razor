@@ -1,0 +1,142 @@
+@page "/users/{Id:guid}/roles"
+@attribute [Authorize]
+@inject IUserApi UserApi
+@inject IRoleApi RoleApi
+@inject NavigationManager Navigation
+@inject ToastService ToastService
+
+<PageTitle>OneAccess - Assign Roles</PageTitle>
+
+<div class="user-roles-container">
+    <div class="page-header mb-4">
+        <h2>Manage User Roles</h2>
+        <p class="text-secondary">Assign roles to user <strong>@user?.Username</strong> (@user?.FullName)</p>
+    </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger mb-4" id="user-roles-error-alert" role="alert">
+            <strong>Error:</strong> @errorMessage
+        </div>
+    }
+
+    <div class="row g-4">
+        <div class="col-md-7">
+            <div class="card p-4">
+                <h4 class="mb-3">Current Assigned Roles</h4>
+                @if (user?.Roles == null || user.Roles.Count == 0)
+                {
+                    <p class="text-muted">No roles assigned to this user yet.</p>
+                }
+                else
+                {
+                    <ul class="list-group list-group-flush mb-0" id="assigned-roles-list">
+                        @foreach (var role in user.Roles)
+                        {
+                            <li class="list-group-item d-flex justify-content-between align-items-center bg-transparent text-light border-secondary">
+                                <div>
+                                    <span class="badge bg-primary me-2">Role</span>
+                                    <strong class="assigned-role-name">@role</strong>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+
+        <div class="col-md-5">
+            <PermissionView Requires="user.update">
+                <div class="card p-4">
+                    <h4 class="mb-3">Assign New Role</h4>
+                    <div class="mb-3">
+                        <label for="role-select" class="form-label">Select Role to Assign</label>
+                        <select class="form-control form-select" id="role-select" @bind="selectedRoleId">
+                            <option value="">-- Choose a Role --</option>
+                            @if (availableRoles != null)
+                            {
+                                @foreach (var r in availableRoles)
+                                {
+                                    <option value="@r.Id">@r.Name</option>
+                                }
+                            }
+                        </select>
+                    </div>
+
+                    <div class="actions mt-3">
+                        <button class="btn btn-primary w-100" id="assign-role-btn"
+                                disabled="@(isSaving || selectedRoleId == Guid.Empty)"
+                                @onclick="HandleAssignRole">
+                            @(isSaving ? "Assigning..." : "Assign Role")
+                        </button>
+                    </div>
+                </div>
+            </PermissionView>
+        </div>
+    </div>
+
+    <div class="mt-4">
+        <a href="/users" class="btn btn-outline" id="back-to-users-btn">← Back to User List</a>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private UserDetailsDto? user;
+    private IReadOnlyList<RoleDto>? availableRoles;
+    private Guid selectedRoleId = Guid.Empty;
+    private string? errorMessage;
+    private bool isSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            user = await UserApi.GetUserByIdAsync(Id);
+            availableRoles = await RoleApi.GetRolesAsync();
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load role details: {ex.Message}";
+        }
+    }
+
+    private async Task HandleAssignRole()
+    {
+        if (selectedRoleId == Guid.Empty) return;
+
+        errorMessage = null;
+        isSaving = true;
+
+        try
+        {
+            await UserApi.AssignRoleAsync(Id, selectedRoleId);
+            ToastService.ShowSuccess("Role assigned successfully.");
+            selectedRoleId = Guid.Empty;
+            await LoadData();
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Problem?.Detail ?? ex.Message;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to assign role: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}

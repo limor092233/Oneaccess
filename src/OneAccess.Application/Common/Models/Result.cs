@@ -10,18 +10,24 @@ public class Result
     public string? ErrorCode { get; protected set; }
     public int StatusCode { get; protected set; } = 200;
 
-    protected Result(bool succeeded, string? error = null, string? errorCode = null, int statusCode = 200)
+    public Dictionary<string, string[]>? Errors { get; protected set; }
+
+    protected Result(bool succeeded, string? error = null, string? errorCode = null, int statusCode = 200, Dictionary<string, string[]>? errors = null)
     {
         Succeeded = succeeded;
         Error = error;
         ErrorCode = errorCode;
         StatusCode = statusCode;
+        Errors = errors;
     }
 
     public static Result Success() => new(true);
     
     public static Result Failure(string error, string? errorCode = null, int statusCode = 400) 
         => new(false, error, errorCode, statusCode);
+
+    public static Result ValidationFailure(Dictionary<string, string[]> errors, string? error = null)
+        => new(false, error ?? "One or more validation errors occurred.", "ValidationError", 400, errors);
 
     public static Result NotFound(string error = "Resource not found.") 
         => new(false, error, "NotFound", 404);
@@ -43,8 +49,8 @@ public class Result<T> : Result
 {
     public T? Value { get; private set; }
 
-    protected Result(bool succeeded, T? value, string? error = null, string? errorCode = null, int statusCode = 200)
-        : base(succeeded, error, errorCode, statusCode)
+    protected Result(bool succeeded, T? value, string? error = null, string? errorCode = null, int statusCode = 200, Dictionary<string, string[]>? errors = null)
+        : base(succeeded, error, errorCode, statusCode, errors)
     {
         Value = value;
     }
@@ -53,6 +59,9 @@ public class Result<T> : Result
 
     public static new Result<T> Failure(string error, string? errorCode = null, int statusCode = 400) 
         => new(false, default, error, errorCode, statusCode);
+
+    public static new Result<T> ValidationFailure(Dictionary<string, string[]> errors, string? error = null)
+        => new(false, default, error ?? "One or more validation errors occurred.", "ValidationError", 400, errors);
 
     public static new Result<T> NotFound(string error = "Resource not found.") 
         => new(false, default, error, "NotFound", 404);

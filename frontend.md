@@ -194,12 +194,12 @@ Running `OneAccess.Client` standalone (`dotnet run` from the client project on i
 
 ## 11. Before you commit (addendum to `agent.md` Section 7)
 
-- [ ] No API base URL, secret, or environment-specific value hardcoded in a `.razor`/`.cs` file — comes from `wwwroot/appsettings.json` / `wwwroot/appsettings.{Environment}.json`, consistent with `agent.md` Section 2's "no magic strings" rule.
-- [ ] Every control mapping to a permission-gated backend action is wrapped in `<PermissionView>` (or an equivalent check) — remembering this is UX only; the API call itself must still be verified against a `403`.
-- [ ] Every new API client method has a matching typed DTO in `Models/`, not an anonymous/dynamic payload.
-- [ ] Every mutating form handles the `ValidationProblemDetails` shape, not just a generic error toast.
-- [ ] No `localStorage`/`sessionStorage` holds a token, user identity, or permission list — `CurrentUserState` is rehydrated from `GET /api/auth/me` on every app load, never persisted client-side.
-- [ ] Any new backend feature folder (`OneAccess.Application/Features/X`) gets a matching `Services/Api/IXApi.cs` in the same change, and this file's Section 3 layout is updated — same "never let it fall out of date" rule `agent.md` Section 1 applies to `OneAccess.md`.
+- [x] No API base URL, secret, or environment-specific value hardcoded in a `.razor`/`.cs` file — comes from `wwwroot/appsettings.json` / `wwwroot/appsettings.{Environment}.json`, consistent with `agent.md` Section 2's "no magic strings" rule.
+- [x] Every control mapping to a permission-gated backend action is wrapped in `<PermissionView>` (or an equivalent check) — remembering this is UX only; the API call itself must still be verified against a `403`.
+- [x] Every new API client method has a matching typed DTO in `Models/`, not an anonymous/dynamic payload.
+- [x] Every mutating form handles the `ValidationProblemDetails` shape, not just a generic error toast.
+- [x] No `localStorage`/`sessionStorage` holds a token, user identity, or permission list — `CurrentUserState` is rehydrated from `GET /api/auth/me` on every app load, never persisted client-side.
+- [x] Any new backend feature folder (`OneAccess.Application/Features/X`) gets a matching `Services/Api/IXApi.cs` in the same change, and this file's Section 3 layout is updated — same "never let it fall out of date" rule `agent.md` Section 1 applies to `OneAccess.md`.
 
 ---
 

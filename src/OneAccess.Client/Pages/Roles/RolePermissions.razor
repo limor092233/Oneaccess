@@ -1,0 +1,184 @@
+@page "/roles/{Id:guid}/permissions"
+@attribute [Authorize]
+@inject IRoleApi RoleApi
+@inject IPermissionApi PermissionApi
+@inject NavigationManager Navigation
+@inject ToastService ToastService
+
+<PageTitle>OneAccess - Role Permissions</PageTitle>
+
+<div class="role-permissions-page-container">
+    <div class="page-header mb-4">
+        <h2>Manage Permissions: @role?.Name</h2>
+        <p class="text-secondary">@role?.Description</p>
+    </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger mb-4" id="role-perms-error-alert" role="alert">
+            <strong>Error:</strong> @errorMessage
+        </div>
+    }
+
+    @if (role != null && role.IsSystemRole && role.Name == "System Administrator")
+    {
+        <div class="alert alert-info mb-4" id="sysadmin-all-perms-alert">
+            <strong>ℹ️ System Administrator Role:</strong> This built-in system role holds all permissions by default. Permissions cannot be modified.
+        </div>
+    }
+
+    @if (isLoading)
+    {
+        <div class="card p-5 text-center">
+            <div class="loading-spinner mx-auto mb-3"></div>
+            <p class="text-secondary">Loading permissions catalog...</p>
+        </div>
+    }
+    else if (permissionsByModule != null)
+    {
+        <div class="permissions-modules-grid">
+            @foreach (var moduleGroup in permissionsByModule)
+            {
+                <div class="card mb-4 p-0">
+                    <div class="card-header bg-dark border-secondary px-4 py-3 d-flex justify-content-between align-items-center">
+                        <h4 class="mb-0 text-light h5">@moduleGroup.Key</h4>
+                        <span class="badge bg-secondary">@moduleGroup.Value.Count permissions</span>
+                    </div>
+                    <div class="card-body p-3">
+                        <div class="row g-3">
+                            @foreach (var perm in moduleGroup.Value)
+                            {
+                                var isAssigned = assignedPermissionCodes.Contains(perm.Code);
+                                var isSysAdminRole = role != null && role.IsSystemRole && role.Name == "System Administrator";
+                                var isDisabled = isSysAdminRole || !perm.IsDelegable;
+
+                                <div class="col-md-6 col-lg-4">
+                                    <div class="permission-card p-3 rounded border border-secondary @(isDisabled ? "bg-opacity-10 bg-secondary opacity-75" : "bg-dark")"
+                                         id="perm-card-@perm.Code.Replace(".", "-")">
+                                        <div class="form-check">
+                                            <input class="form-check-input perm-checkbox"
+                                                   type="checkbox"
+                                                   id="perm-check-@perm.Code.Replace(".", "-")"
+                                                   checked="@isAssigned"
+                                                   disabled="@isDisabled"
+                                                   @onchange="@(async (e) => await TogglePermission(perm, (bool)(e.Value ?? false)))" />
+                                            <label class="form-check-label ms-2" for="perm-check-@perm.Code.Replace(".", "-")">
+                                                <strong class="d-block text-light perm-code-label">@perm.Code</strong>
+                                                <small class="text-secondary d-block">@perm.Description</small>
+                                                @if (!perm.IsDelegable)
+                                                {
+                                                    <span class="badge bg-danger bg-opacity-25 text-danger border border-danger mt-1 non-delegable-badge"
+                                                          id="non-delegable-badge-@perm.Code.Replace(".", "-")">
+                                                        🔒 Non-delegable
+                                                    </span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-success bg-opacity-25 text-success border border-success mt-1">
+                                                        Delegable
+                                                    </span>
+                                                }
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    <div class="mt-4">
+        <a href="/roles" class="btn btn-outline" id="back-to-roles-btn">← Back to Role List</a>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private RoleDto? role;
+    private IReadOnlyList<PermissionDto>? allPermissions;
+    private Dictionary<string, List<PermissionDto>>? permissionsByModule;
+    private HashSet<string> assignedPermissionCodes = new(StringComparer.OrdinalIgnoreCase);
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            var roles = await RoleApi.GetRolesAsync();
+            role = roles?.FirstOrDefault(r => r.Id == Id);
+            allPermissions = await PermissionApi.GetPermissionsAsync();
+
+            if (role != null && role.Permissions != null)
+            {
+                assignedPermissionCodes = new HashSet<string>(role.Permissions, StringComparer.OrdinalIgnoreCase);
+            }
+
+            if (allPermissions != null)
+            {
+                permissionsByModule = allPermissions
+                    .GroupBy(p => p.Module)
+                    .ToDictionary(g => g.Key, g => g.ToList());
+            }
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load permissions: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task TogglePermission(PermissionDto permission, bool isChecked)
+    {
+        if (role == null) return;
+
+        try
+        {
+            if (isChecked)
+            {
+                await RoleApi.AssignPermissionAsync(role.Id, permission.Id);
+                assignedPermissionCodes.Add(permission.Code);
+                ToastService.ShowSuccess($"Assigned '{permission.Code}' to role '{role.Name}'.");
+            }
+            else
+            {
+                await RoleApi.RevokePermissionAsync(role.Id, permission.Id);
+                assignedPermissionCodes.Remove(permission.Code);
+                ToastService.ShowSuccess($"Revoked '{permission.Code}' from role '{role.Name}'.");
+            }
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Problem?.Detail ?? ex.Message;
+            ToastService.ShowError($"Permission update failed: {errorMessage}");
+            // Revert local state
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"An unexpected error occurred: {ex.Message}";
+            ToastService.ShowError(errorMessage);
+            await LoadData();
+        }
+    }
+}

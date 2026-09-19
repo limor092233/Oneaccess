@@ -1,0 +1,157 @@
+@page "/roles"
+@attribute [Authorize]
+@inject IRoleApi RoleApi
+@inject NavigationManager Navigation
+@inject ToastService ToastService
+
+<PageTitle>OneAccess - Roles</PageTitle>
+
+<div class="roles-page-container">
+    <div class="page-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>Role Management</h2>
+            <p class="text-secondary">Manage security roles and their fine-grained permission assignments.</p>
+        </div>
+        <PermissionView Requires="role.create">
+            <a href="/roles/new" class="btn btn-primary" id="new-role-btn">
+                <span>+ Create Role</span>
+            </a>
+        </PermissionView>
+    </div>
+
+    <div class="card p-0">
+        <DataTable TItem="RoleDto"
+                   Items="@roles"
+                   IsLoading="@isLoading"
+                   ErrorMessage="@errorMessage"
+                   OnRetry="@LoadRoles">
+            <HeaderContent>
+                <th>Role Name</th>
+                <th>Description</th>
+                <th>System Role</th>
+                <th>Permissions</th>
+                <th>Created</th>
+                <th class="text-end">Actions</th>
+            </HeaderContent>
+            <RowTemplate Context="role">
+                <td>
+                    <strong class="role-name-cell" id="role-name-@role.Name.Replace(" ", "-")">@role.Name</strong>
+                </td>
+                <td>@role.Description</td>
+                <td>
+                    @if (role.IsSystemRole)
+                    {
+                        <span class="badge bg-warning text-dark">System</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary">Custom</span>
+                    }
+                </td>
+                <td>
+                    <span class="badge bg-info text-dark">@(role.Permissions?.Count ?? 0) permissions</span>
+                </td>
+                <td>@role.CreatedAt.ToLocalTime().ToString("g")</td>
+                <td class="text-end">
+                    <div class="btn-group btn-group-sm">
+                        <PermissionView Requires="rolepermission.assign">
+                            <a href="/roles/@role.Id/permissions" class="btn btn-outline btn-sm me-1 role-permissions-btn" id="perms-btn-@role.Name.Replace(" ", "-")" title="Manage Permissions">Permissions</a>
+                        </PermissionView>
+                        <PermissionView Requires="role.update">
+                            <a href="/roles/@role.Id/edit" class="btn btn-outline btn-sm me-1 role-edit-btn" id="edit-btn-@role.Name.Replace(" ", "-")" title="Edit Role">Edit</a>
+                        </PermissionView>
+                        <PermissionView Requires="role.delete">
+                            @if (!role.IsSystemRole)
+                            {
+                                <button class="btn btn-outline-danger btn-sm role-delete-btn" id="delete-btn-@role.Name.Replace(" ", "-")" title="Delete Role"
+                                        @onclick="() => PromptDelete(role)">Delete</button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-outline-secondary btn-sm disabled" disabled title="System roles cannot be deleted">Delete</button>
+                            }
+                        </PermissionView>
+                    </div>
+                </td>
+            </RowTemplate>
+        </DataTable>
+    </div>
+</div>
+
+<ConfirmDialog IsVisible="@isConfirmDeleteVisible"
+               Title="Delete Role"
+               Message="@($"Are you sure you want to permanently delete role '{roleToDelete?.Name}'?")"
+               ConfirmText="Delete Role"
+               OnConfirm="@ConfirmDelete"
+               OnCancel="@CancelDelete" />
+
+@code {
+    private IReadOnlyList<RoleDto>? roles;
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    private bool isConfirmDeleteVisible;
+    private RoleDto? roleToDelete;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRoles();
+    }
+
+    private async Task LoadRoles()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            roles = await RoleApi.GetRolesAsync();
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load roles: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private void PromptDelete(RoleDto role)
+    {
+        roleToDelete = role;
+        isConfirmDeleteVisible = true;
+    }
+
+    private void CancelDelete()
+    {
+        roleToDelete = null;
+        isConfirmDeleteVisible = false;
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (roleToDelete == null) return;
+
+        try
+        {
+            await RoleApi.DeleteRoleAsync(roleToDelete.Id);
+            ToastService.ShowSuccess($"Role '{roleToDelete.Name}' was successfully deleted.");
+            isConfirmDeleteVisible = false;
+            roleToDelete = null;
+            await LoadRoles();
+        }
+        catch (ApiException ex)
+        {
+            ToastService.ShowError($"Failed to delete role: {ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"An unexpected error occurred: {ex.Message}");
+        }
+    }
+}
