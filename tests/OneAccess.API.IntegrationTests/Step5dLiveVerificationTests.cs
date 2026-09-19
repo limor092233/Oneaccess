@@ -128,7 +128,8 @@ public class Step5dLiveVerificationTests : IClassFixture<OneAccessApiFactory>
         permResp.StatusCode.Should().Be(HttpStatusCode.OK);
         var permissions = await permResp.Content.ReadFromJsonAsync<List<PermissionDto>>(_jsonOptions);
         permissions.Should().NotBeNull();
-        permissions.Should().NotBeEmpty();
+        permissions!.Count.Should().Be(29);
+        _output.WriteLine($"SysAdmin permissions count: {permissions.Count}");
 
         var delegablePerm = permissions!.FirstOrDefault(p => p.Code == "permission.view");
         delegablePerm.Should().NotBeNull();
@@ -203,7 +204,8 @@ public class Step5dLiveVerificationTests : IClassFixture<OneAccessApiFactory>
         divAdminPermResp.StatusCode.Should().Be(HttpStatusCode.OK);
         var divAdminPerms = await divAdminPermResp.Content.ReadFromJsonAsync<List<PermissionDto>>(_jsonOptions);
         divAdminPerms.Should().NotBeNull();
-        divAdminPerms.Should().NotBeEmpty();
-        divAdminPerms!.Count.Should().Be(permissions.Count);
+        divAdminPerms!.Count.Should().Be(29);
+        _output.WriteLine($"div1admin permissions count: {divAdminPerms.Count}");
+        divAdminPerms.Count.Should().Be(permissions.Count);
     }
 }
