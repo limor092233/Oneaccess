@@ -1,8 +1,10 @@
 using System.Net;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using OneAccess.API.Authorization;
 using OneAccess.API.HealthChecks;
 using OneAccess.Application.Common.Interfaces;
 using OneAccess.Infrastructure.Options;
@@ -53,6 +55,7 @@ public static class WebApplicationExtensions
             });
 
         services.AddAuthorization();
+        services.AddScoped<IAuthorizationHandler, PermissionAuthorizationHandler>();
 
         // 2. CORS configuration from appsettings.json
         var corsSection = configuration.GetSection(CorsOptions.SectionName);
