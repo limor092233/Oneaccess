@@ -1,0 +1,299 @@
+@page "/audit"
+@attribute [Authorize]
+@inject IAuditApi AuditApi
+@inject ToastService ToastService
+@using System.Text.Json
+
+<PageTitle>OneAccess - Audit Logs</PageTitle>
+
+<div class="audit-page-container">
+    <div class="page-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>Audit Trail</h2>
+            <p class="text-secondary">Comprehensive, immutable system audit log for security, compliance, and administrative tracking.</p>
+        </div>
+    </div>
+
+    <!-- Filter Card -->
+    <div class="table-toolbar card mb-4 p-3">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label" for="audit-filter-entity">Entity Type</label>
+                <input type="text" class="form-control" id="audit-filter-entity" placeholder="e.g. Role, User, SubSystem"
+                       @bind="filterEntityType" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label" for="audit-filter-action">Action</label>
+                <input type="text" class="form-control" id="audit-filter-action" placeholder="e.g. role_created, login_success"
+                       @bind="filterAction" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label" for="audit-filter-from">From (UTC)</label>
+                <input type="datetime-local" class="form-control" id="audit-filter-from"
+                       @bind="filterFromUtc" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label" for="audit-filter-to">To (UTC)</label>
+                <input type="datetime-local" class="form-control" id="audit-filter-to"
+                       @bind="filterToUtc" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label" for="audit-pagesize-select">Page Size</label>
+                <select class="form-select" id="audit-pagesize-select" @bind="pageSize">
+                    <option value="2">2 per page</option>
+                    <option value="3">3 per page</option>
+                    <option value="5">5 per page</option>
+                    <option value="10">10 per page</option>
+                    <option value="20">20 per page</option>
+                    <option value="50">50 per page</option>
+                </select>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-12 d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center gap-2">
+                    <input type="text" class="form-control form-control-sm" id="audit-filter-userid" placeholder="Filter by User ID (Guid)..."
+                           style="width: 320px;" @bind="filterUserIdText" />
+                </div>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-primary btn-sm" id="audit-filter-btn" @onclick="ApplyFilters">Apply Filters</button>
+                    <button class="btn btn-outline btn-sm" id="audit-clear-btn" @onclick="ClearFilters">Reset Filters</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data Table Card -->
+    <div class="card p-0">
+        <DataTable TItem="AuditLogDto"
+                   Items="@auditLogs"
+                   IsLoading="@isLoading"
+                   ErrorMessage="@errorMessage"
+                   OnRetry="@LoadAuditLogs">
+            <HeaderContent>
+                <th>Timestamp (UTC)</th>
+                <th>Action</th>
+                <th>Entity Type</th>
+                <th>Entity ID</th>
+                <th>User ID</th>
+                <th>IP Address</th>
+                <th>Details</th>
+                <th class="text-end">Action</th>
+            </HeaderContent>
+            <RowTemplate Context="log">
+                <td class="text-nowrap mono-text">
+                    <span id="audit-time-@log.Id">@log.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")</span>
+                </td>
+                <td>
+                    <span class="badge badge-action" id="audit-action-@log.Id">@log.Action</span>
+                </td>
+                <td>
+                    <span class="badge badge-entity" id="audit-entity-type-@log.Id">@log.EntityType</span>
+                </td>
+                <td class="mono-text" title="@log.EntityId">
+                    <span id="audit-entity-id-@log.Id">@(log.EntityId.Length > 18 ? log.EntityId.Substring(0, 18) + "..." : log.EntityId)</span>
+                </td>
+                <td class="mono-text">
+                    @(log.UserId.HasValue ? log.UserId.Value.ToString().Substring(0, 8) + "..." : "-")
+                </td>
+                <td class="text-secondary small">
+                    @(string.IsNullOrWhiteSpace(log.IpAddress) ? "-" : log.IpAddress)
+                </td>
+                <td class="text-secondary small" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    @GetDetailsPreview(log.Details)
+                </td>
+                <td class="text-end">
+                    <button class="btn btn-outline btn-sm" id="view-details-@log.Id" @onclick="() => ShowDetails(log)">
+                        View JSON
+                    </button>
+                </td>
+            </RowTemplate>
+            <EmptyContent>
+                <div class="empty-state-box" id="audit-empty-state">
+                    <p>No audit log records match the selected criteria.</p>
+                </div>
+            </EmptyContent>
+        </DataTable>
+
+        @if (pagedResult != null && pagedResult.TotalPages > 0)
+        {
+            <div class="pagination-container d-flex justify-content-between align-items-center p-3 border-top" id="audit-pagination">
+                <span class="text-secondary small" id="audit-pagination-info">
+                    Showing @(((pageNumber - 1) * pageSize) + 1) to @(Math.Min(pageNumber * pageSize, pagedResult.TotalCount)) of @pagedResult.TotalCount audit records
+                </span>
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline btn-sm" id="audit-prev-page-btn" disabled="@(!pagedResult.HasPreviousPage)" @onclick="() => ChangePage(pageNumber - 1)">Previous</button>
+                    <span class="btn btn-outline btn-sm disabled" id="audit-current-page-display">Page @pageNumber of @pagedResult.TotalPages</span>
+                    <button class="btn btn-outline btn-sm" id="audit-next-page-btn" disabled="@(!pagedResult.HasNextPage)" @onclick="() => ChangePage(pageNumber + 1)">Next</button>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Details Modal -->
+@if (isDetailsModalVisible && selectedLog != null)
+{
+    <div class="modal-backdrop fade show"></div>
+    <div class="modal d-block" tabindex="-1" role="dialog" id="audit-details-modal">
+        <div class="modal-dialog modal-lg" role="document" style="max-width: 700px;">
+            <div class="custom-modal">
+                <div class="modal-header">
+                    <h5 class="modal-title">Audit Entry Details</h5>
+                    <button type="button" class="btn-close" aria-label="Close" @onclick="CloseDetails">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-2 mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label mb-1">Event Action</label>
+                            <div><strong class="badge badge-action">@selectedLog.Action</strong></div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label mb-1">Entity</label>
+                            <div><strong class="badge badge-entity">@selectedLog.EntityType</strong> (@selectedLog.EntityId)</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label mb-1">Timestamp (UTC)</label>
+                            <div class="mono-text">@selectedLog.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss.fff")</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label mb-1">User ID</label>
+                            <div class="mono-text">@(selectedLog.UserId.HasValue ? selectedLog.UserId.Value.ToString() : "System / Unauthenticated")</div>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(selectedLog.IpAddress))
+                        {
+                            <div class="col-md-6">
+                                <label class="form-label mb-1">IP Address</label>
+                                <div class="mono-text">@selectedLog.IpAddress</div>
+                            </div>
+                        }
+                    </div>
+
+                    <label class="form-label mb-1">Structured Details (JSON Payload)</label>
+                    <pre class="json-viewer mb-0" id="audit-details-json"><code>@FormatJson(selectedLog.Details)</code></pre>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline" id="audit-details-close-btn" @onclick="CloseDetails">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private IReadOnlyList<AuditLogDto>? auditLogs;
+    private PagedResult<AuditLogDto>? pagedResult;
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    // Filters
+    private string? filterEntityType;
+    private string? filterAction;
+    private DateTime? filterFromUtc;
+    private DateTime? filterToUtc;
+    private string? filterUserIdText;
+    private int pageNumber = 1;
+    private int pageSize = 20;
+
+    // Details modal
+    private bool isDetailsModalVisible;
+    private AuditLogDto? selectedLog;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAuditLogs();
+    }
+
+    private async Task LoadAuditLogs()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        Guid? parsedUserId = null;
+        if (!string.IsNullOrWhiteSpace(filterUserIdText) && Guid.TryParse(filterUserIdText.Trim(), out var guid))
+        {
+            parsedUserId = guid;
+        }
+
+        try
+        {
+            pagedResult = await AuditApi.GetAuditLogsAsync(
+                pageNumber: pageNumber,
+                pageSize: pageSize,
+                userId: parsedUserId,
+                entityType: filterEntityType,
+                action: filterAction,
+                fromUtc: filterFromUtc,
+                toUtc: filterToUtc
+            );
+            auditLogs = pagedResult?.Items;
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load audit logs: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+
+    private async Task ApplyFilters()
+    {
+        pageNumber = 1;
+        await LoadAuditLogs();
+    }
+
+    private async Task ClearFilters()
+    {
+        filterEntityType = null;
+        filterAction = null;
+        filterFromUtc = null;
+        filterToUtc = null;
+        filterUserIdText = null;
+        pageNumber = 1;
+        await LoadAuditLogs();
+    }
+
+    private async Task ChangePage(int newPage)
+    {
+        pageNumber = newPage;
+        await LoadAuditLogs();
+    }
+
+    private void ShowDetails(AuditLogDto log)
+    {
+        selectedLog = log;
+        isDetailsModalVisible = true;
+    }
+
+    private void CloseDetails()
+    {
+        selectedLog = null;
+        isDetailsModalVisible = false;
+    }
+
+    private static string GetDetailsPreview(string details)
+    {
+        if (string.IsNullOrWhiteSpace(details)) return "-";
+        return details.Length > 50 ? details.Substring(0, 50) + "..." : details;
+    }
+
+    private static string FormatJson(string? rawJson)
+    {
+        if (string.IsNullOrWhiteSpace(rawJson)) return "{ }";
+        try
+        {
+            using var doc = JsonDocument.Parse(rawJson);
+            return JsonSerializer.Serialize(doc.RootElement, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return rawJson;
+        }
+    }
+}

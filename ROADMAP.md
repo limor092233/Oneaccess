@@ -39,11 +39,11 @@ Build sequence for OneAccess. This file is **state, not spec** — it tracks wha
 - [x] **6. Scaffold `OneAccess.Client`**
   Blazor WebAssembly project hosted by `OneAccess.API` (`frontend.md` Section 2). `Program.cs`, `CookieAuthenticationStateProvider`, a bare `Login.razor`. **Verify before checking this box:** the browser round-trip actually works — login sets the cookie, `GET /api/auth/me` returns the logged-in user.
 
-- [ ] **7. Build out client pages, mirroring backend order**
+- [x] **7. Build out client pages, mirroring backend order**
   - [x] 7a. Users, Roles pages
   - [x] 7b. Divisions, Sections pages
   - [x] 7c. SubSystems pages
-  - [ ] 7d. Audit log page
+  - [x] 7d. Audit log page
   Each page pairs with its typed API client interface (`frontend.md` Section 3) and goes through the `frontend.md` Section 11 checklist before being marked done.
 
 - [ ] **8. Section 17 (PIN Code feature)** — only after everything above is done and stable
@@ -52,6 +52,8 @@ Build sequence for OneAccess. This file is **state, not spec** — it tracks wha
 ---
 
 ## Progress Log
+
+- 2026-09-19 — Step 7d completed (closing Step 7 in full: 7a–7d complete): Built complete vertical slice for Audit Log trail querying and inspection in `OneAccess.Client` per frontend.md Sections 3, 5, 7, 9, 11 and OneAccess.md Sections 5, 12, & 14. Implemented typed API client (`IAuditApi`/`AuditApi` registered in DI supporting server-side pagination and multi-parameter filtering: `UserId`, `EntityType`, `Action`, `FromUtc`, `ToUtc`, `PageNumber`, `PageSize`), `AuditModels.cs` (`AuditLogDto`), `AuditLogList.razor` page gated by `@attribute [Authorize]` with `DataTable<AuditLogDto>` (loading/empty/error states, filter controls for EntityType, Action, From/To UTC dates, User ID, and page size dropdown), server-side pagination wired to `PagedResult<AuditLogDto>`, and an interactive Audit Entry Details modal rendering structured, indented and formatted JSON payloads. Updated `NavMenu.razor` gating the Audit link strictly with `<PermissionView Requires="audit.view">`. Verified all 6 live browser round-trip scenarios via automated Chrome DevTools Protocol (CDP): (1) As SysAdmin, navigated to audit log page and confirmed real historical entries render, (2) Filtered by EntityType="Role" and verified matching records and count update, (3) Verified server-side pagination controls across multiple pages, (4) Inspected Audit Details modal confirming JSON renders cleanly formatted and indented, (5) Logged in as non-SysAdmin Administrator holding delegated permissions and verified the Audit nav link is completely absent from NavMenu, (6) Directly navigated to `/audit` route as non-SysAdmin and verified server-side 403 enforcement with automatic `ApiResponseHandler` redirect to `/forbidden`. All 108 unit/integration tests verified passing across the entire test suite — nothing deferred or changed. Step 8 remains deferred.
 
 - 2026-09-19 — Step 7c completed: Built complete vertical slice for SubSystems client management in `OneAccess.Client` per frontend.md Sections 3, 5, 7, 8, 9, 11 and OneAccess.md Sections 5 & 14. Implemented typed API client (`ISubSystemApi`/`SubSystemApi` registered in DI), pages (`SubSystemList.razor` with status badges & permission-gated action buttons, `SubSystemForm.razor` with immutable Code on edit mode and RFC 7807 `ValidationProblemDetails` field error mapping, `SubSystemAccess.razor` with tabbed By Role / By User governance, System Administrator unrestricted notice, sub-system dropdown assignment, and `ConfirmDialog` revocation), and updated `NavMenu.razor` with `subsystem.view` gated nav link. Verified all live browser round-trip scenarios via automated Chrome DevTools Protocol (CDP): (1) SysAdmin registered SubSystem `BILLING_xxxx` appearing immediately in `SubSystemList` without page reload, (2) SysAdmin edited SubSystem confirming Code input is visibly disabled and name/URL updates render immediately, (3) Role-based access governance tab verified System Administrator unrestricted access alert and allowed Administrator allow-list addition, (4) User-based access governance tab verified assigning user override and revoking via `ConfirmDialog` modal, (5) Non-SysAdmin standard user verified mutation buttons (Register, Manage Access Rules, Edit) are hidden, and unauthorized form submission / 403 returned from API automatically redirected to `/forbidden` via `ApiResponseHandler`. All 108 unit/integration tests verified passing across the entire test suite — nothing deferred or changed.
 
