@@ -62,6 +62,8 @@ app.MapSetupEndpoints();
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
 app.MapRoleEndpoints();
+app.MapPermissionEndpoints();
+app.MapAuditEndpoints();
 app.MapDivisionEndpoints();
 app.MapSectionEndpoints();
 app.MapSubSystemEndpoints();
