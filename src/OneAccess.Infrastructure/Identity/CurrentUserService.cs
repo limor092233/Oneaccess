@@ -59,19 +59,8 @@ public class CurrentUserService : ICurrentUserService
 
     public async Task<bool> IsSystemAdministratorAsync(CancellationToken ct = default)
     {
-        if (!UserId.HasValue) return false;
-
-        var cacheKey = $"is_sysadmin:{UserId.Value}";
-        var cached = await _cacheService.GetAsync<bool?>(cacheKey, ct);
-        if (cached.HasValue) return cached.Value;
-
-        var isSysAdmin = await _readDbContext.Users
-            .Where(u => u.Id == UserId.Value && u.Status == UserStatus.Active)
-            .Select(u => u.IsSystemAdministrator)
-            .FirstOrDefaultAsync(ct);
-
-        await _cacheService.SetAsync(cacheKey, isSysAdmin, TimeSpan.FromMinutes(5), ct);
-        return isSysAdmin;
+        var roles = await GetRolesAsync(ct);
+        return roles.Contains(SystemRoles.SystemAdministrator);
     }
 
     public async Task<IReadOnlyList<string>> GetRolesAsync(CancellationToken ct = default)
