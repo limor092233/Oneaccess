@@ -1,0 +1,240 @@
+@page "/subsystems/new"
+@page "/subsystems/{Id:guid}/edit"
+@attribute [Authorize]
+@inject ISubSystemApi SubSystemApi
+@inject NavigationManager Navigation
+@inject ToastService ToastService
+
+<PageTitle>OneAccess - @(IsEditMode ? "Edit SubSystem" : "Register SubSystem")</PageTitle>
+
+<div class="form-page-container">
+    <div class="page-header mb-4">
+        <h2>@(IsEditMode ? $"Edit SubSystem: {codeReadOnly}" : "Register New SubSystem")</h2>
+        <p class="text-secondary">@(IsEditMode ? "Update sub-system configuration and OAuth audience." : "Register an external service/application to enable SSO and access control.")</p>
+    </div>
+
+    @if (!string.IsNullOrEmpty(generalError))
+    {
+        <div class="alert alert-danger mb-4" id="subsystem-form-error-alert" role="alert">
+            <strong>Error:</strong> <span id="subsystem-form-error-text">@generalError</span>
+        </div>
+    }
+
+    <div class="card p-4">
+        <EditForm Model="@formModel" OnSubmit="@HandleSubmit">
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <label for="subsystem-code-input" class="form-label">
+                        SubSystem Code
+                        @if (IsEditMode)
+                        {
+                            <span class="badge bg-secondary ms-1">Immutable</span>
+                        }
+                    </label>
+                    <input type="text" class="form-control @(GetFieldError("Code") != null ? "is-invalid" : "")"
+                           id="subsystem-code-input"
+                           disabled="@IsEditMode"
+                           @bind="formModel.Code"
+                           @bind:event="oninput"
+                           placeholder="e.g. BILLING_PORTAL" />
+                    @if (GetFieldError("Code") != null)
+                    {
+                        <div class="invalid-feedback d-block field-error" id="error-Code">@GetFieldError("Code")</div>
+                    }
+                    @if (!IsEditMode)
+                    {
+                        <small class="text-secondary">Unique machine identifier used in JWT audiences and API routes.</small>
+                    }
+                </div>
+
+                <div class="col-md-6">
+                    <label for="subsystem-name-input" class="form-label">Display Name</label>
+                    <input type="text" class="form-control @(GetFieldError("Name") != null ? "is-invalid" : "")"
+                           id="subsystem-name-input"
+                           @bind="formModel.Name"
+                           @bind:event="oninput"
+                           placeholder="e.g. Billing & Invoicing Portal" />
+                    @if (GetFieldError("Name") != null)
+                    {
+                        <div class="invalid-feedback d-block field-error" id="error-Name">@GetFieldError("Name")</div>
+                    }
+                </div>
+
+                <div class="col-md-6">
+                    <label for="subsystem-baseurl-input" class="form-label">Base URL</label>
+                    <input type="text" class="form-control @(GetFieldError("BaseUrl") != null ? "is-invalid" : "")"
+                           id="subsystem-baseurl-input"
+                           @bind="formModel.BaseUrl"
+                           @bind:event="oninput"
+                           placeholder="https://billing.internal.company.com" />
+                    @if (GetFieldError("BaseUrl") != null)
+                    {
+                        <div class="invalid-feedback d-block field-error" id="error-BaseUrl">@GetFieldError("BaseUrl")</div>
+                    }
+                </div>
+
+                <div class="col-md-6">
+                    <label for="subsystem-audience-input" class="form-label">Audience Identifier</label>
+                    <input type="text" class="form-control @(GetFieldError("Audience") != null ? "is-invalid" : "")"
+                           id="subsystem-audience-input"
+                           @bind="formModel.Audience"
+                           @bind:event="oninput"
+                           placeholder="e.g. oneaccess:subsystem:billing" />
+                    @if (GetFieldError("Audience") != null)
+                    {
+                        <div class="invalid-feedback d-block field-error" id="error-Audience">@GetFieldError("Audience")</div>
+                    }
+                </div>
+
+                <div class="col-md-12 mt-3">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="subsystem-active-input"
+                               @bind="formModel.IsActive" />
+                        <label class="form-check-label ms-2" for="subsystem-active-input">
+                            <strong>Is Active</strong>
+                            <small class="text-secondary d-block">Active sub-systems are available for token issuance and user access.</small>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-actions d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+                <a href="/subsystems" class="btn btn-outline" id="cancel-subsystem-btn">Cancel</a>
+                <button type="button" class="btn btn-primary" id="save-subsystem-btn" disabled="@isSaving" @onclick="HandleSubmit">
+                    @(isSaving ? "Saving..." : (IsEditMode ? "Save Changes" : "Register SubSystem"))
+                </button>
+            </div>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [Parameter]
+    public Guid? Id { get; set; }
+
+    private bool IsEditMode => Id.HasValue && Id != Guid.Empty;
+
+    private class SubSystemFormViewModel
+    {
+        public string Code { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public string BaseUrl { get; set; } = string.Empty;
+        public string Audience { get; set; } = string.Empty;
+        public bool IsActive { get; set; } = true;
+    }
+
+    private SubSystemFormViewModel formModel = new();
+    private string codeReadOnly = string.Empty;
+    private Dictionary<string, string[]> fieldErrors = new(StringComparer.OrdinalIgnoreCase);
+    private string? generalError;
+    private bool isSaving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (IsEditMode)
+        {
+            await LoadSubSystem(Id!.Value);
+        }
+    }
+
+    private async Task LoadSubSystem(Guid subSystemId)
+    {
+        try
+        {
+            var subSystems = await SubSystemApi.GetSubSystemsAsync();
+            var item = subSystems?.FirstOrDefault(s => s.Id == subSystemId);
+            if (item != null)
+            {
+                codeReadOnly = item.Code;
+                formModel = new SubSystemFormViewModel
+                {
+                    Code = item.Code,
+                    Name = item.Name,
+                    BaseUrl = item.BaseUrl,
+                    Audience = item.Audience,
+                    IsActive = item.IsActive
+                };
+            }
+            else
+            {
+                generalError = "SubSystem not found.";
+            }
+        }
+        catch (ApiException ex)
+        {
+            generalError = ex.Message;
+        }
+        catch (Exception ex)
+        {
+            generalError = $"Failed to load sub-system: {ex.Message}";
+        }
+    }
+
+    private string? GetFieldError(string fieldName)
+    {
+        if (fieldErrors.TryGetValue(fieldName, out var errors) && errors.Length > 0)
+        {
+            return string.Join("; ", errors);
+        }
+
+        return null;
+    }
+
+    private async Task HandleSubmit()
+    {
+        fieldErrors.Clear();
+        generalError = null;
+        isSaving = true;
+
+        try
+        {
+            if (IsEditMode)
+            {
+                var req = new UpdateSubSystemRequest
+                {
+                    Name = formModel.Name,
+                    BaseUrl = formModel.BaseUrl,
+                    Audience = formModel.Audience,
+                    IsActive = formModel.IsActive
+                };
+                await SubSystemApi.UpdateSubSystemAsync(Id!.Value, req);
+                ToastService.ShowSuccess($"SubSystem '{formModel.Name}' updated successfully.");
+                Navigation.NavigateTo("/subsystems");
+            }
+            else
+            {
+                var req = new CreateSubSystemRequest
+                {
+                    Code = formModel.Code,
+                    Name = formModel.Name,
+                    BaseUrl = formModel.BaseUrl,
+                    Audience = formModel.Audience,
+                    IsActive = formModel.IsActive
+                };
+                var created = await SubSystemApi.RegisterSubSystemAsync(req);
+                ToastService.ShowSuccess($"SubSystem '{formModel.Name}' registered successfully.");
+                Navigation.NavigateTo("/subsystems");
+            }
+        }
+        catch (ApiException ex)
+        {
+            if (ex.Problem?.Errors != null && ex.Problem.Errors.Count > 0)
+            {
+                fieldErrors = new Dictionary<string, string[]>(ex.Problem.Errors, StringComparer.OrdinalIgnoreCase);
+                generalError = ex.Problem.Detail ?? "Please correct the validation errors below.";
+            }
+            else
+            {
+                generalError = ex.Problem?.Detail ?? ex.Message;
+            }
+        }
+        catch (Exception ex)
+        {
+            generalError = $"An unexpected error occurred: {ex.Message}";
+        }
+        finally
+        {
+            isSaving = false;
+        }
+    }
+}

@@ -1,0 +1,568 @@
+@page "/subsystems/access"
+@attribute [Authorize]
+@inject ISubSystemApi SubSystemApi
+@inject IRoleApi RoleApi
+@inject IUserApi UserApi
+@inject NavigationManager Navigation
+@inject ToastService ToastService
+
+<PageTitle>OneAccess - SubSystem Access Governance</PageTitle>
+
+<div class="subsystem-access-container">
+    <div class="page-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>Sub-System Access Governance</h2>
+            <p class="text-secondary">Configure role-based access restrictions and user-specific sub-system overrides.</p>
+        </div>
+        <a href="/subsystems" class="btn btn-outline" id="back-to-subsystems-btn">
+            ← Back to SubSystems
+        </a>
+    </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger mb-4" id="access-error-alert" role="alert">
+            <strong>Error:</strong> @errorMessage
+        </div>
+    }
+
+    <!-- Tab navigation -->
+    <ul class="nav nav-tabs mb-4" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(currentTab == AccessTab.Role ? "active" : "")"
+                    id="tab-by-role"
+                    type="button"
+                    @onclick="() => SwitchTab(AccessTab.Role)">
+                🛡️ By Role
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(currentTab == AccessTab.User ? "active" : "")"
+                    id="tab-by-user"
+                    type="button"
+                    @onclick="() => SwitchTab(AccessTab.User)">
+                👤 By User
+            </button>
+        </li>
+    </ul>
+
+    @if (currentTab == AccessTab.Role)
+    {
+        <!-- By Role Content -->
+        <div class="tab-pane-role">
+            <div class="card p-4 mb-4">
+                <h5 class="card-title mb-2">Select Role</h5>
+                <p class="text-secondary small mb-3">
+                    By default, roles have unrestricted access to all active sub-systems. If one or more sub-systems are added to a role's allow-list, members of that role will <strong>only</strong> have access to those specific sub-systems.
+                </p>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="access-role-select" class="form-label">Role</label>
+                        <select class="form-control form-select" id="access-role-select" @onchange="OnRoleSelected">
+                            <option value="">-- Choose a Role --</option>
+                            @if (roles != null)
+                            {
+                                @foreach (var r in roles)
+                                {
+                                    <option value="@r.Id" selected="@(selectedRoleId == r.Id)">@r.Name @(r.IsSystemRole ? "(System Role)" : "")</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            @if (selectedRole != null)
+            {
+                @if (selectedRole.Name == "System Administrator")
+                {
+                    <div class="alert alert-info mb-4" id="sysadmin-restriction-notice">
+                        <strong>ℹ️ Unrestricted Access:</strong> The System Administrator role has unrestricted access to all sub-systems across the organization. Sub-system restrictions cannot be applied to this role.
+                    </div>
+                }
+                else
+                {
+                    <PermissionView Requires="rolesubsystem.assign">
+                        <div class="card p-4 mb-4">
+                            <h5 class="card-title mb-2">Add Sub-System to Role Allow-List</h5>
+                            <p class="text-secondary small mb-3">
+                                Restrict role <strong>@selectedRole.Name</strong> to access this sub-system.
+                            </p>
+                            <div class="row g-3 align-items-end">
+                                <div class="col-md-8">
+                                    <label for="role-subsystem-select" class="form-label">Sub-System</label>
+                                    <select class="form-control form-select" id="role-subsystem-select" @onchange="OnRoleSubSystemSelected">
+                                        <option value="">-- Select Sub-System --</option>
+                                        @if (availableSubSystemsForRole != null)
+                                        {
+                                            @foreach (var s in availableSubSystemsForRole)
+                                            {
+                                                <option value="@s.Id" selected="@(selectedSubSystemToAssignForRole == s.Id)">@s.Name (@s.Code)</option>
+                                            }
+                                        }
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <button class="btn btn-primary w-100" id="assign-role-subsystem-btn"
+                                            disabled="@(selectedSubSystemToAssignForRole == null || isAssigningRole)"
+                                            @onclick="AssignRoleSubSystem">
+                                        @(isAssigningRole ? "Adding..." : "+ Add to Allow-List")
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </PermissionView>
+
+                    <div class="card p-0">
+                        <div class="card-header p-3 bg-transparent border-bottom d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Allowed Sub-Systems for Role: @selectedRole.Name (@(roleSubSystems?.Count ?? 0))</h5>
+                        </div>
+                        <DataTable TItem="SubSystemDto"
+                                   Items="@roleSubSystems"
+                                   IsLoading="@isLoadingRoleSubSystems"
+                                   ErrorMessage="@errorMessage"
+                                   OnRetry="@LoadRoleSubSystems">
+                            <EmptyContent>
+                                <div class="empty-state-box" id="role-empty-subsystems">
+                                    <p>No restrictions configured. Role members have unrestricted access to all active sub-systems.</p>
+                                </div>
+                            </EmptyContent>
+                            <HeaderContent>
+                                <th>Code</th>
+                                <th>Name</th>
+                                <th>Base URL</th>
+                                <th>Audience</th>
+                                <th class="text-end">Actions</th>
+                            </HeaderContent>
+                            <RowTemplate Context="subsystem">
+                                <td>
+                                    <strong class="subsystem-code text-light" id="role-ss-code-@subsystem.Code">@subsystem.Code</strong>
+                                </td>
+                                <td>@subsystem.Name</td>
+                                <td><code class="text-info">@subsystem.BaseUrl</code></td>
+                                <td><code class="text-secondary">@subsystem.Audience</code></td>
+                                <td class="text-end">
+                                    <PermissionView Requires="rolesubsystem.revoke">
+                                        <button class="btn btn-outline-danger btn-sm"
+                                                id="revoke-role-ss-btn-@subsystem.Code"
+                                                title="Revoke Sub-System from Role"
+                                                @onclick="() => PromptRevokeRoleSubSystem(subsystem)">
+                                            Revoke
+                                        </button>
+                                    </PermissionView>
+                                </td>
+                            </RowTemplate>
+                        </DataTable>
+                    </div>
+                }
+            }
+        </div>
+    }
+    else
+    {
+        <!-- By User Content -->
+        <div class="tab-pane-user">
+            <div class="card p-4 mb-4">
+                <h5 class="card-title mb-2">Select User</h5>
+                <p class="text-secondary small mb-3">
+                    User-specific access rules override role-based rules. When sub-systems are assigned directly to a user, they will <strong>only</strong> have access to those specific sub-systems, superseding their role permissions.
+                </p>
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="access-user-select" class="form-label">User</label>
+                        <select class="form-control form-select" id="access-user-select" @onchange="OnUserSelected">
+                            <option value="">-- Choose a User --</option>
+                            @if (users != null)
+                            {
+                                @foreach (var u in users)
+                                {
+                                    <option value="@u.Id" selected="@(selectedUserId == u.Id)">@u.FullName (@u.Username - @u.Email)</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            @if (selectedUser != null)
+            {
+                <PermissionView Requires="usersubsystem.assign">
+                    <div class="card p-4 mb-4">
+                        <h5 class="card-title mb-2">Add Sub-System to User Allow-List</h5>
+                        <p class="text-secondary small mb-3">
+                            Grant explicit sub-system access to <strong>@selectedUser.FullName</strong> (@selectedUser.Username).
+                        </p>
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-8">
+                                <label for="user-subsystem-select" class="form-label">Sub-System</label>
+                                <select class="form-control form-select" id="user-subsystem-select" @onchange="OnUserSubSystemSelected">
+                                    <option value="">-- Select Sub-System --</option>
+                                    @if (availableSubSystemsForUser != null)
+                                    {
+                                        @foreach (var s in availableSubSystemsForUser)
+                                        {
+                                            <option value="@s.Id" selected="@(selectedSubSystemToAssignForUser == s.Id)">@s.Name (@s.Code)</option>
+                                        }
+                                    }
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <button class="btn btn-primary w-100" id="assign-user-subsystem-btn"
+                                        disabled="@(selectedSubSystemToAssignForUser == null || isAssigningUser)"
+                                        @onclick="AssignUserSubSystem">
+                                    @(isAssigningUser ? "Adding..." : "+ Add to Allow-List")
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </PermissionView>
+
+                <div class="card p-0">
+                    <div class="card-header p-3 bg-transparent border-bottom d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Allowed Sub-Systems for User: @selectedUser.Username (@(userSubSystems?.Count ?? 0))</h5>
+                    </div>
+                    <DataTable TItem="SubSystemDto"
+                               Items="@userSubSystems"
+                               IsLoading="@isLoadingUserSubSystems"
+                               ErrorMessage="@errorMessage"
+                               OnRetry="@LoadUserSubSystems">
+                        <EmptyContent>
+                            <div class="empty-state-box" id="user-empty-subsystems">
+                                <p>No user override configured. Access is governed by assigned roles.</p>
+                            </div>
+                        </EmptyContent>
+                        <HeaderContent>
+                            <th>Code</th>
+                            <th>Name</th>
+                            <th>Base URL</th>
+                            <th>Audience</th>
+                            <th class="text-end">Actions</th>
+                        </HeaderContent>
+                        <RowTemplate Context="subsystem">
+                            <td>
+                                <strong class="subsystem-code text-light" id="user-ss-code-@subsystem.Code">@subsystem.Code</strong>
+                            </td>
+                            <td>@subsystem.Name</td>
+                            <td><code class="text-info">@subsystem.BaseUrl</code></td>
+                            <td><code class="text-secondary">@subsystem.Audience</code></td>
+                            <td class="text-end">
+                                <PermissionView Requires="usersubsystem.revoke">
+                                    <button class="btn btn-outline-danger btn-sm"
+                                            id="revoke-user-ss-btn-@subsystem.Code"
+                                            title="Revoke Sub-System from User"
+                                            @onclick="() => PromptRevokeUserSubSystem(subsystem)">
+                                        Revoke
+                                    </button>
+                                </PermissionView>
+                            </td>
+                        </RowTemplate>
+                    </DataTable>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<ConfirmDialog IsVisible="@isConfirmRevokeVisible"
+               Title="@confirmRevokeTitle"
+               Message="@confirmRevokeMessage"
+               ConfirmText="Revoke Access"
+               OnConfirm="@ConfirmRevoke"
+               OnCancel="@CancelRevoke" />
+
+@code {
+    private enum AccessTab { Role, User }
+
+    private AccessTab currentTab = AccessTab.Role;
+
+    private IReadOnlyList<RoleDto>? roles;
+    private IReadOnlyList<UserDto>? users;
+    private IReadOnlyList<SubSystemDto>? allSubSystems;
+
+    // Role state
+    private Guid? selectedRoleId;
+    private RoleDto? selectedRole => roles?.FirstOrDefault(r => r.Id == selectedRoleId);
+    private IReadOnlyList<SubSystemDto>? roleSubSystems;
+    private IReadOnlyList<SubSystemDto>? availableSubSystemsForRole;
+    private Guid? selectedSubSystemToAssignForRole;
+    private bool isLoadingRoleSubSystems;
+    private bool isAssigningRole;
+
+    // User state
+    private Guid? selectedUserId;
+    private UserDto? selectedUser => users?.FirstOrDefault(u => u.Id == selectedUserId);
+    private IReadOnlyList<SubSystemDto>? userSubSystems;
+    private IReadOnlyList<SubSystemDto>? availableSubSystemsForUser;
+    private Guid? selectedSubSystemToAssignForUser;
+    private bool isLoadingUserSubSystems;
+    private bool isAssigningUser;
+
+    private string? errorMessage;
+
+    // Revocation dialog state
+    private bool isConfirmRevokeVisible;
+    private string confirmRevokeTitle = string.Empty;
+    private string confirmRevokeMessage = string.Empty;
+    private Func<Task>? confirmRevokeAction;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadInitialData();
+    }
+
+    private async Task LoadInitialData()
+    {
+        errorMessage = null;
+        try
+        {
+            allSubSystems = await SubSystemApi.GetSubSystemsAsync();
+            roles = await RoleApi.GetRolesAsync();
+
+            var userResult = await UserApi.GetUsersAsync(pageNumber: 1, pageSize: 100);
+            users = userResult?.Items;
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Problem?.Detail ?? ex.Message;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load lookup data: {ex.Message}";
+        }
+    }
+
+    private void SwitchTab(AccessTab tab)
+    {
+        currentTab = tab;
+        errorMessage = null;
+    }
+
+    // Role selection & data loading
+    private async Task OnRoleSelected(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString();
+        if (Guid.TryParse(val, out var guid))
+        {
+            selectedRoleId = guid;
+            await LoadRoleSubSystems();
+        }
+        else
+        {
+            selectedRoleId = null;
+            roleSubSystems = null;
+            availableSubSystemsForRole = null;
+        }
+    }
+
+    private void OnRoleSubSystemSelected(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString();
+        if (Guid.TryParse(val, out var guid))
+        {
+            selectedSubSystemToAssignForRole = guid;
+        }
+        else
+        {
+            selectedSubSystemToAssignForRole = null;
+        }
+    }
+
+    private async Task LoadRoleSubSystems()
+    {
+        if (selectedRoleId == null) return;
+
+        isLoadingRoleSubSystems = true;
+        errorMessage = null;
+
+        try
+        {
+            roleSubSystems = await SubSystemApi.GetRoleSubSystemsAsync(selectedRoleId.Value);
+            var assignedIds = roleSubSystems?.Select(s => s.Id).ToHashSet() ?? new HashSet<Guid>();
+            availableSubSystemsForRole = allSubSystems?.Where(s => !assignedIds.Contains(s.Id) && s.IsActive).ToList();
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Problem?.Detail ?? ex.Message;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load role sub-systems: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingRoleSubSystems = false;
+        }
+    }
+
+    private async Task AssignRoleSubSystem()
+    {
+        if (selectedRoleId == null || selectedSubSystemToAssignForRole == null) return;
+
+        isAssigningRole = true;
+        errorMessage = null;
+
+        try
+        {
+            await SubSystemApi.AssignRoleSubSystemAsync(selectedRoleId.Value, selectedSubSystemToAssignForRole.Value);
+            ToastService.ShowSuccess("Sub-system added to role allow-list.");
+            selectedSubSystemToAssignForRole = null;
+            await LoadRoleSubSystems();
+        }
+        catch (ApiException ex)
+        {
+            ToastService.ShowError($"Failed to assign sub-system: {ex.Problem?.Detail ?? ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"An unexpected error occurred: {ex.Message}");
+        }
+        finally
+        {
+            isAssigningRole = false;
+        }
+    }
+
+    private void PromptRevokeRoleSubSystem(SubSystemDto subSystem)
+    {
+        if (selectedRoleId == null || selectedRole == null) return;
+
+        confirmRevokeTitle = "Revoke Role Sub-System Access";
+        confirmRevokeMessage = $"Are you sure you want to remove sub-system '{subSystem.Name}' ({subSystem.Code}) from the allow-list for role '{selectedRole.Name}'?";
+        confirmRevokeAction = async () =>
+        {
+            await SubSystemApi.RevokeRoleSubSystemAsync(selectedRoleId.Value, subSystem.Id);
+            ToastService.ShowSuccess($"Revoked access to '{subSystem.Name}'.");
+            await LoadRoleSubSystems();
+        };
+        isConfirmRevokeVisible = true;
+    }
+
+    // User selection & data loading
+    private async Task OnUserSelected(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString();
+        if (Guid.TryParse(val, out var guid))
+        {
+            selectedUserId = guid;
+            await LoadUserSubSystems();
+        }
+        else
+        {
+            selectedUserId = null;
+            userSubSystems = null;
+            availableSubSystemsForUser = null;
+        }
+    }
+
+    private void OnUserSubSystemSelected(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString();
+        if (Guid.TryParse(val, out var guid))
+        {
+            selectedSubSystemToAssignForUser = guid;
+        }
+        else
+        {
+            selectedSubSystemToAssignForUser = null;
+        }
+    }
+
+    private async Task LoadUserSubSystems()
+    {
+        if (selectedUserId == null) return;
+
+        isLoadingUserSubSystems = true;
+        errorMessage = null;
+
+        try
+        {
+            userSubSystems = await SubSystemApi.GetUserSubSystemsAsync(selectedUserId.Value);
+            var assignedIds = userSubSystems?.Select(s => s.Id).ToHashSet() ?? new HashSet<Guid>();
+            availableSubSystemsForUser = allSubSystems?.Where(s => !assignedIds.Contains(s.Id) && s.IsActive).ToList();
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Problem?.Detail ?? ex.Message;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load user sub-systems: {ex.Message}";
+        }
+        finally
+        {
+            isLoadingUserSubSystems = false;
+        }
+    }
+
+    private async Task AssignUserSubSystem()
+    {
+        if (selectedUserId == null || selectedSubSystemToAssignForUser == null) return;
+
+        isAssigningUser = true;
+        errorMessage = null;
+
+        try
+        {
+            await SubSystemApi.AssignUserSubSystemAsync(selectedUserId.Value, selectedSubSystemToAssignForUser.Value);
+            ToastService.ShowSuccess("Sub-system added to user allow-list.");
+            selectedSubSystemToAssignForUser = null;
+            await LoadUserSubSystems();
+        }
+        catch (ApiException ex)
+        {
+            ToastService.ShowError($"Failed to assign sub-system: {ex.Problem?.Detail ?? ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"An unexpected error occurred: {ex.Message}");
+        }
+        finally
+        {
+            isAssigningUser = false;
+        }
+    }
+
+    private void PromptRevokeUserSubSystem(SubSystemDto subSystem)
+    {
+        if (selectedUserId == null || selectedUser == null) return;
+
+        confirmRevokeTitle = "Revoke User Sub-System Access";
+        confirmRevokeMessage = $"Are you sure you want to remove sub-system '{subSystem.Name}' ({subSystem.Code}) from the allow-list for user '{selectedUser.FullName}'?";
+        confirmRevokeAction = async () =>
+        {
+            await SubSystemApi.RevokeUserSubSystemAsync(selectedUserId.Value, subSystem.Id);
+            ToastService.ShowSuccess($"Revoked access to '{subSystem.Name}'.");
+            await LoadUserSubSystems();
+        };
+        isConfirmRevokeVisible = true;
+    }
+
+    private async Task ConfirmRevoke()
+    {
+        if (confirmRevokeAction == null) return;
+
+        try
+        {
+            await confirmRevokeAction();
+        }
+        catch (ApiException ex)
+        {
+            ToastService.ShowError($"Failed to revoke sub-system: {ex.Problem?.Detail ?? ex.Message}");
+        }
+        catch (Exception ex)
+        {
+            ToastService.ShowError($"An unexpected error occurred: {ex.Message}");
+        }
+        finally
+        {
+            isConfirmRevokeVisible = false;
+            confirmRevokeAction = null;
+        }
+    }
+
+    private void CancelRevoke()
+    {
+        isConfirmRevokeVisible = false;
+        confirmRevokeAction = null;
+    }
+}

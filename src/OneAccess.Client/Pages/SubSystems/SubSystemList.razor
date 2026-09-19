@@ -1,0 +1,110 @@
+@page "/subsystems"
+@attribute [Authorize]
+@inject ISubSystemApi SubSystemApi
+@inject NavigationManager Navigation
+@inject ToastService ToastService
+
+<PageTitle>OneAccess - SubSystems</PageTitle>
+
+<div class="subsystems-page-container">
+    <div class="page-header d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>Sub-System Management</h2>
+            <p class="text-secondary">Register and manage external sub-systems, OAuth audiences, and access allow-lists.</p>
+        </div>
+        <div class="d-flex align-items-center">
+            <PermissionView Requires="rolesubsystem.assign">
+                <a href="/subsystems/access" class="btn btn-outline me-2" id="manage-access-btn">
+                    <span>🛡️ Manage Access Rules</span>
+                </a>
+            </PermissionView>
+            <PermissionView Requires="subsystem.register">
+                <a href="/subsystems/new" class="btn btn-primary" id="new-subsystem-btn">
+                    <span>+ Register SubSystem</span>
+                </a>
+            </PermissionView>
+        </div>
+    </div>
+
+    <div class="card p-0">
+        <DataTable TItem="SubSystemDto"
+                   Items="@subSystems"
+                   IsLoading="@isLoading"
+                   ErrorMessage="@errorMessage"
+                   OnRetry="@LoadSubSystems">
+            <HeaderContent>
+                <th>Code</th>
+                <th>Name</th>
+                <th>Base URL</th>
+                <th>Audience</th>
+                <th>Status</th>
+                <th class="text-end">Actions</th>
+            </HeaderContent>
+            <RowTemplate Context="subsystem">
+                <td>
+                    <strong class="subsystem-code text-light" id="subsystem-code-@subsystem.Code">@subsystem.Code</strong>
+                </td>
+                <td>
+                    <span id="subsystem-name-@subsystem.Code">@subsystem.Name</span>
+                </td>
+                <td>
+                    <code class="text-info">@subsystem.BaseUrl</code>
+                </td>
+                <td>
+                    <code class="text-secondary">@subsystem.Audience</code>
+                </td>
+                <td>
+                    @if (subsystem.IsActive)
+                    {
+                        <span class="badge bg-success" id="badge-active-@subsystem.Code">Active</span>
+                    }
+                    else
+                    {
+                        <span class="badge bg-secondary" id="badge-inactive-@subsystem.Code">Inactive</span>
+                    }
+                </td>
+                <td class="text-end">
+                    <PermissionView Requires="subsystem.update">
+                        <a href="/subsystems/@subsystem.Id/edit" class="btn btn-outline btn-sm subsystem-edit-btn" id="edit-btn-@subsystem.Code" title="Edit SubSystem">
+                            Edit
+                        </a>
+                    </PermissionView>
+                </td>
+            </RowTemplate>
+        </DataTable>
+    </div>
+</div>
+
+@code {
+    private IReadOnlyList<SubSystemDto>? subSystems;
+    private bool isLoading = true;
+    private string? errorMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSubSystems();
+    }
+
+    private async Task LoadSubSystems()
+    {
+        isLoading = true;
+        errorMessage = null;
+
+        try
+        {
+            subSystems = await SubSystemApi.GetSubSystemsAsync();
+        }
+        catch (ApiException ex)
+        {
+            errorMessage = ex.Problem?.Detail ?? ex.Message;
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Failed to load sub-systems: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+        }
+    }
+}
