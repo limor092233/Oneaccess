@@ -15,11 +15,11 @@
                 <div class="card-body">
                     <p id="home-welcome-message">Hello, <strong>@context.User.Identity?.Name</strong>! You are currently logged in.</p>
                     <div class="claims-summary">
-                        <h4>Assigned Roles &amp; Permissions:</h4>
-                        <ul>
-                            @foreach (var claim in context.User.Claims.Where(c => c.Type == System.Security.Claims.ClaimTypes.Role || c.Type == "role" || c.Type == "permission"))
+                        <h4>Assigned Claims (<span id="total-claims-count">@context.User.Claims.Count()</span> total, <span id="permission-claims-count">@context.User.Claims.Count(c => c.Type == "permission")</span> permissions):</h4>
+                        <ul id="claims-list">
+                            @foreach (var claim in context.User.Claims)
                             {
-                                <li><code>@claim.Type</code>: <strong>@claim.Value</strong></li>
+                                <li data-claim-type="@claim.Type" data-claim-value="@claim.Value" class="claim-item"><code>@claim.Type</code> = <strong>@claim.Value</strong></li>
                             }
                         </ul>
                     </div>
