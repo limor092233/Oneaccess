@@ -52,6 +52,11 @@ public static class DependencyInjection
             .ValidateDataAnnotations()
             .ValidateOnStart();
 
+        services.AddOptions<CookieOptions>()
+            .Bind(configuration.GetSection(CookieOptions.SectionName))
+            .ValidateDataAnnotations()
+            .ValidateOnStart();
+
         // 2. Core Providers & Interceptors
         services.AddSingleton<IDateTimeProvider, DateTimeProvider>();
         services.AddScoped<AuditableEntityInterceptor>();

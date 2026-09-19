@@ -52,10 +52,8 @@ public class JwtTokenService : IJwtTokenService
             claims.Add(new Claim("role", role));
         }
 
-        var header = new JwtHeader(credentials)
-        {
-            { "kid", kid }
-        };
+        var header = new JwtHeader(credentials);
+        header["kid"] = kid;
 
         var payload = new JwtPayload(_jwtOptions.Issuer, audience ?? _jwtOptions.Audience, claims, now, expires, now);
         var token = new JwtSecurityToken(header, payload);
