@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using OneAccess.Application.Common.Interfaces;
 using OneAccess.Infrastructure.BackgroundJobs;
 using OneAccess.Infrastructure.Identity;
@@ -14,7 +15,7 @@ namespace OneAccess.Infrastructure;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
+    public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration, IHostEnvironment? environment = null)
     {
         // 1. Strongly-typed Options with DataAnnotations validation on start
         services.AddOptions<JwtOptions>()
@@ -95,6 +96,13 @@ public static class DependencyInjection
         }
         else
         {
+            if (environment != null && !environment.IsDevelopment() && !environment.IsEnvironment("Test"))
+            {
+                throw new InvalidOperationException(
+                    "Redis connection string 'Redis:ConnectionString' is missing or empty. " +
+                    "In non-development environments, a valid Redis connection string is required for distributed caching and token revocation.");
+            }
+
             services.AddDistributedMemoryCache();
         }
 

@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using OneAccess.API.Authorization;
 using OneAccess.API.HealthChecks;
 using OneAccess.Application.Common.Interfaces;
+using OneAccess.Infrastructure.Identity;
 using OneAccess.Infrastructure.Options;
 using OneAccess.Infrastructure.Persistence;
 using OneAccess.Infrastructure.Persistence.Seed;
@@ -150,6 +151,9 @@ public static class WebApplicationExtensions
             {
                 await dbContext.Database.EnsureCreatedAsync();
             }
+
+            // Ensure RSA signing keys are initialized and validated on startup
+            _ = services.GetRequiredService<RsaKeyProvider>();
 
             // Seed default permissions and roles
             await PermissionSeeder.SeedAsync(dbContext);
